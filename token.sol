@@ -636,8 +636,10 @@ contract Galeon is ERC20Capped, Ownable {
     }
     // override default transfer function 
     function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
-        // check if amount is lower than the limit
-        require(amount <= limit,"85700 GALEON limit Exceeded");
+        // if limiteEnabled check if balance + amount is lower than the limit
+        if(limitEnabled) {
+            require(balanceOf(recipient) + amount <= limit,"85700 GALEON limit Exceeded");
+        }
         // execute orignal transfer method
         super.transfer(recipient, amount);
         return true;
