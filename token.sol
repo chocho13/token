@@ -622,6 +622,10 @@ contract Galeon is ERC20Capped, Ownable {
         // disable bool
         limitEnabled = false;
     }
+    // call function, return if limit is enabled
+    function isTransferLimitEnabled() public view returns (bool) {
+        return limitEnabled;
+    }
     // mint function only executable by Owner of the contract
     function mint(address to, uint256 amount) public onlyOwner {
         _mint(to, amount);
