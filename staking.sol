@@ -10,7 +10,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     struct Stake {
         address user;
         uint amount;
-        uint sinceBlock;
         uint lastUpdate;
         uint untilBlock;
         uint unclaimed;
@@ -45,7 +44,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(_amount < STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        stakes.push(Stake(msg.sender, _amount, block.timestamp, block.timestamp, block.timestamp + 10 minutes,0));
+        stakes.push(Stake(msg.sender, _amount, block.timestamp, block.timestamp + 10 minutes,0));
         ownerStakIds[msg.sender].push(stakes.length-1);
         totalSupply += _amount;
         return true;
