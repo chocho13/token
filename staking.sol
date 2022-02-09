@@ -69,17 +69,17 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     function unstake() external updatePool nonReentrant returns(uint unstaked) {
         uint amount = 0;
         uint i = 0;
-        uint j;
+        uint stakeId;
         while(i < ownerStakIds[msg.sender].length) {
-            j = ownerStakIds[msg.sender][i];
-            if (stakes[j].untilBlock < block.timestamp) {
-                amount = stakes[j].amount + stakes[i].unclaimed;
+            stakeId = ownerStakIds[msg.sender][i];
+            if (stakes[stakeId].untilBlock < block.timestamp) {
+                amount = stakes[stakeId].amount + stakes[i].unclaimed;
                 require(STAKING_TOKEN.balanceOf(address(this)) > amount, "Insuficient contract balance");
                 require(STAKING_TOKEN.transfer(msg.sender,amount), "Transfer failed");
-                stakes[j] = stakes[stakes.length -1];
-                for(uint k = 0; k < ownerStakIds[stakes[j].user].length; k++) {
-                    if (ownerStakIds[stakes[j].user][k] == stakes.length -1) {
-                        ownerStakIds[stakes[j].user][k] = j;
+                stakes[stakeId] = stakes[stakes.length -1];
+                for(uint k = 0; k < ownerStakIds[stakes[stakeId].user].length; k++) {
+                    if (ownerStakIds[stakes[stakeId].user][k] == stakes.length -1) {
+                        ownerStakIds[stakes[stakeId].user][k] = stakeId;
                     }
                 }
                 stakes.pop();
