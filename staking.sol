@@ -66,7 +66,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         return claimed;
     }
 
-    function unstake() external updatePool nonReentrant {
+    function unstake() external updatePool nonReentrant returns(uint unstaked) {
         uint amount;
         uint j;
         for(uint i = 0; i < ownerStakIds[msg.sender].length; i++) {
@@ -85,6 +85,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             }
         }
         ownerStakIds[msg.sender] = getUserStaksIds(msg.sender);
+        return amount;
     }
 
     function getUserStaksIds(address _user) public view returns (uint[] memory) {
