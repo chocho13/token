@@ -15,7 +15,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     Stake[] public stakes;
-    mapping(address => uint[]) public ownerStakIds;
+    mapping(address => uint[]) private ownerStakIds;
 
     uint public totalSupply;
     bool public stakingAllowed;
@@ -25,8 +25,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
     uint public constant REWARD_PER_BLOCK = 0.6808 * 1e18;
 
-    // address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    address public constant STAKING_TOKEN_ADDRESS = 0xDecB06cCa15031927Adb8B2e8773145646CFB564; // testnet address
+    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
     
     constructor() {
