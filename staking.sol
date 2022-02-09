@@ -10,7 +10,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     struct Stake {
         address user;
         uint amount;
-        uint lastUpdate;
         uint untilBlock;
         uint unclaimed;
     }
@@ -20,6 +19,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     uint public totalSupply;
     bool public stakingAllowed;
+    uint public lastUpdate;
 
     uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
@@ -30,12 +30,22 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
     
     constructor() {
+        lastUpdate = block.timestamp;
         totalSupply = 0;
         stakingAllowed = true;
     }
 
+    event Stacked(uint _amount,uint _totalSupply);
+    event Unstaked(uint _amount);
+    event Claimed(uint _claimed);
+    event Allowed(bool _allow);
+    event Updated(uint _lastupdate);
+
     function allowStaking(bool _allow) external onlyOwner returns (bool allowed) {
         return stakingAllowed = _allow;
+    }
+    function forceUpdatePool() external updatePool nonReentrant returns (bool updated) {
+        return true;
     }
 
     function stake(uint _amount) external updatePool nonReentrant returns (bool staked) {
@@ -44,9 +54,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(_amount < STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        stakes.push(Stake(msg.sender, _amount, block.timestamp, block.timestamp + 10 minutes,0));
+        stakes.push(Stake(msg.sender, _amount, block.timestamp + 10 minutes,0));
         ownerStakIds[msg.sender].push(stakes.length-1);
         totalSupply += _amount;
+        emit Stacked(_amount,totalSupply);
         return true;
     }
 
@@ -62,6 +73,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             claimed += stakes[j].unclaimed;
             stakes[j].unclaimed = 0;
         }
+        emit Claimed(claimed);
         return claimed;
     }
 
@@ -89,6 +101,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             }
         }
         require(amount > 0, "Nothing to unstake");
+        emit Unstaked(amount);
         return amount;
     }
 
@@ -113,13 +126,13 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     modifier updatePool() {
         for(uint i = 0; i < stakes.length; i++) {
             if(stakes[i].untilBlock >= block.timestamp) {
-                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - stakes[i].lastUpdate) * REWARD_PER_BLOCK / totalSupply;
-                stakes[i].lastUpdate = block.timestamp;
-            } else if (stakes[i].lastUpdate < stakes[i].untilBlock) {
-                stakes[i].unclaimed += stakes[i].amount * (stakes[i].untilBlock - stakes[i].lastUpdate) * REWARD_PER_BLOCK / totalSupply;
-                stakes[i].lastUpdate = stakes[i].untilBlock;
+                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * REWARD_PER_BLOCK / totalSupply;
+            } else if (lastUpdate < stakes[i].untilBlock) {
+                stakes[i].unclaimed += stakes[i].amount * (stakes[i].untilBlock - lastUpdate) * REWARD_PER_BLOCK / totalSupply;
             }
         }
+        lastUpdate = block.timestamp;
+        emit Updated(lastUpdate);
         _;
     }
 }
