@@ -15,7 +15,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     Stake[] public stakes;
-    mapping(address => uint[]) private ownerStakIds;
+    mapping(address => uint[]) public ownerStakIds;
 
     uint public totalSupply;
     bool public stakingAllowed;
