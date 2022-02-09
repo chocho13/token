@@ -20,7 +20,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     mapping(address => uint[]) private ownerStakIds;
 
     uint public totalSupply;
-    bool public stakingEnabled;
+    bool public stakingAllowed;
 
     uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
@@ -32,15 +32,15 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     
     constructor() {
         totalSupply = 0;
-        stakingEnabled = true;
+        stakingAllowed = true;
     }
 
-    function enableStaking(bool _enable) external onlyOwner returns (bool enabled) {
-        return stakingEnabled = _enable;
+    function allowStaking(bool _allow) external onlyOwner returns (bool allowed) {
+        return stakingAllowed = _allow;
     }
 
     function stake(uint _amount) external updatePool nonReentrant returns (bool staked) {
-        require(stakingEnabled, "Staking is not enabled");
+        require(stakingAllowed, "Staking is not enabled");
         require(_amount >= MINIMUM_AMOUNT, "Insuficient amount");
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(_amount < STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
@@ -67,9 +67,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function unstake() external updatePool nonReentrant returns(uint unstaked) {
-        uint amount;
+        uint amount = 0;
+        uint i = 0;
         uint j;
-        for(uint i = 0; i < ownerStakIds[msg.sender].length; i++) {
+        while(i < ownerStakIds[msg.sender].length) {
             j = ownerStakIds[msg.sender][i];
             if (stakes[j].untilBlock < block.timestamp) {
                 amount = stakes[j].amount + stakes[i].unclaimed;
@@ -82,14 +83,18 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
                     }
                 }
                 stakes.pop();
+                ownerStakIds[msg.sender][i] = ownerStakIds[msg.sender][ownerStakIds[msg.sender].length -1];
+                ownerStakIds[msg.sender].pop();
+            } else {
+                i++;
             }
         }
-        ownerStakIds[msg.sender] = getUserStaksIds(msg.sender);
+        require(amount > 0, "Nothing to unstake");
         return amount;
     }
 
-    function getUserStaksIds(address _user) public view returns (uint[] memory) {
-        uint j=0;
+    function getUserStaksIds(address _user) external view returns (uint[] memory) {
+        uint j = 0;
         for(uint i = 0; i < stakes.length; i++) {
             if (stakes[i].user == _user) {
                 j++;
@@ -104,11 +109,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             }
         }
         return ids;
-    }
-
-
-    function forceUpdate() external updatePool returns(bool updated) {
-        return true;
     }
 
     modifier updatePool() {
