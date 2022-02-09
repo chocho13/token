@@ -11,13 +11,14 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         address user;
         uint amount;
         uint sinceBlock;
-        uint untilBlock;
         uint lastUpdate;
+        uint untilBlock;
         uint unclaimed;
     }
 
-    Stake[] private stakes;
-    
+    Stake[] public stakes;
+    mapping(address => uint[]) private ownerStakIds;
+
     uint public totalSupply;
     bool public stakingEnabled;
 
@@ -25,8 +26,9 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
     uint public constant REWARD_PER_BLOCK = 0.6808 * 1e18;
 
-    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    IERC20 internal constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
+    // address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
+    address public constant STAKING_TOKEN_ADDRESS = 0xDecB06cCa15031927Adb8B2e8773145646CFB564; // testnet address
+    IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
     
     constructor() {
         totalSupply = 0;
@@ -43,63 +45,79 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(_amount < STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        stakes.push(Stake(msg.sender, _amount, block.timestamp, block.timestamp, block.timestamp + 365 days,0));
+        stakes.push(Stake(msg.sender, _amount, block.timestamp, block.timestamp, block.timestamp + 10 minutes,0));
+        ownerStakIds[msg.sender].push(stakes.length-1);
         totalSupply += _amount;
         return true;
     }
 
-    function claim() external updatePool nonReentrant returns(uint) {
+    function claim() external updatePool nonReentrant returns(uint amount) {
         uint claimed = 0;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].user == msg.sender) {
-                if (stakes[i].unclaimed > 0) {
-                    require(STAKING_TOKEN.balanceOf(address(this)) > stakes[i].unclaimed, "Insuficient contract balance");
-                    require(STAKING_TOKEN.transfer(msg.sender,stakes[i].unclaimed), "Transfer failed");
-                }
-                claimed += stakes[i].unclaimed;
-                stakes[i].unclaimed = 0;
+        uint j;
+        for(uint i = 0; i < ownerStakIds[msg.sender].length; i++) {
+            j = ownerStakIds[msg.sender][i];
+            if (stakes[j].unclaimed > 0) {
+                require(STAKING_TOKEN.balanceOf(address(this)) > stakes[j].unclaimed, "Insuficient contract balance");
+                require(STAKING_TOKEN.transfer(msg.sender,stakes[j].unclaimed), "Transfer failed");
             }
+            claimed += stakes[j].unclaimed;
+            stakes[j].unclaimed = 0;
         }
         return claimed;
     }
 
     function unstake() external updatePool nonReentrant {
-        uint[] memory unstakeIds;
-        uint j = 0;
         uint amount;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].untilBlock < block.timestamp && stakes[i].user == msg.sender) {
-                unstakeIds[j] = i;
-                j++;
-                amount += stakes[i].amount;
+        uint j;
+        for(uint i = 0; i < ownerStakIds[msg.sender].length; i++) {
+            j = ownerStakIds[msg.sender][i];
+            if (stakes[j].untilBlock < block.timestamp) {
+                amount = stakes[j].amount + stakes[i].unclaimed;
+                require(STAKING_TOKEN.balanceOf(address(this)) > amount, "Insuficient contract balance");
+                require(STAKING_TOKEN.transfer(msg.sender,amount), "Transfer failed");
+                stakes[j] = stakes[stakes.length -1];
+                for(uint k = 0; k < ownerStakIds[stakes[j].user].length; k++) {
+                    if (ownerStakIds[stakes[j].user][k] == stakes.length -1) {
+                        ownerStakIds[stakes[j].user][k] = j;
+                    }
+                }
+                stakes.pop();
             }
         }
-        require(STAKING_TOKEN.balanceOf(address(this)) > amount, "Insuficient contract balance");
-        require(STAKING_TOKEN.transfer(msg.sender,amount), "Transfer failed");
-        for(uint i = 0; i < unstakeIds.length; i++) {
-            stakes[unstakeIds[i]] = stakes[stakes.length -1];
-            stakes.pop();
-        }
-
+        ownerStakIds[msg.sender] = getUserStaksIds(msg.sender);
     }
 
-    function viewUserStaks(address _user) external view returns (Stake[] memory) {
-        Stake[] memory currents;
+    function getUserStaksIds(address _user) public view returns (uint[] memory) {
         uint j=0;
         for(uint i = 0; i < stakes.length; i++) {
             if (stakes[i].user == _user) {
-                currents[j] = stakes[i];
                 j++;
             }
         }
-        return currents;
+        uint[] memory ids = new uint[](j);
+        j = 0;
+        for(uint i = 0; i < stakes.length; i++) {
+            if (stakes[i].user == _user) {
+                ids[j] = i;
+                j++;
+            }
+        }
+        return ids;
+    }
+
+
+    function forceUpdate() external updatePool returns(bool updated) {
+        return true;
     }
 
     modifier updatePool() {
         for(uint i = 0; i < stakes.length; i++) {
             if(stakes[i].untilBlock >= block.timestamp) {
-                stakes[i].unclaimed += stakes[i].amount / totalSupply * (block.timestamp - stakes[i].lastUpdate) * REWARD_PER_BLOCK;
+                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - stakes[i].lastUpdate) * REWARD_PER_BLOCK / totalSupply;
                 stakes[i].lastUpdate = block.timestamp;
+            } else if (stakes[i].lastUpdate < stakes[i].untilBlock) {
+                stakes[i].unclaimed += stakes[i].amount * (stakes[i].untilBlock - stakes[i].lastUpdate) * REWARD_PER_BLOCK / totalSupply;
+                stakes[i].lastUpdate = stakes[i].untilBlock;
             }
         }
         _;
