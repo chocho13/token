@@ -18,6 +18,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     mapping(address => uint[]) private ownerStakIds;
 
     uint public totalSupply;
+    uint public totalStaked;
     bool public stakingAllowed;
     uint public lastUpdate;
 
@@ -56,6 +57,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         stakes.push(Stake(msg.sender, _amount, block.timestamp + 1 year,0));
         ownerStakIds[msg.sender].push(stakes.length-1);
         totalSupply += _amount;
+        totalStaked += _amount;
         emit Stacked(_amount,totalSupply);
         return true;
     }
@@ -66,7 +68,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         for(uint i = 0; i < ownerStakIds[msg.sender].length; i++) {
             j = ownerStakIds[msg.sender][i];
             if (stakes[j].unclaimed > 0) {
-                require(STAKING_TOKEN.balanceOf(address(this)) > stakes[j].unclaimed, "Insuficient contract balance");
+                require(STAKING_TOKEN.balanceOf(address(this)) - totalStaked > stakes[j].unclaimed, "Insuficient contract balance");
                 require(STAKING_TOKEN.transfer(msg.sender,stakes[j].unclaimed), "Transfer failed");
             }
             claimed += stakes[j].unclaimed;
@@ -100,6 +102,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             }
         }
         require(amount > 0, "Nothing to unstake");
+        totalStaked -= amount;
         emit Unstaked(amount);
         return amount;
     }
