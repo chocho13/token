@@ -91,9 +91,9 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             if (stakes[stakeId].untilBlock < block.timestamp) {
                 amountStaking += stakes[stakeId].amount;
                 require(STAKING_TOKEN.balanceOf(address(this)) > stakes[stakeId].amount, "Insuficient staking contract balance");
+                require(REWARD_TOKEN.balanceOf(address(this)) > stakes[stakeId].unclaimed, "Insuficient reward contract balance");
                 require(STAKING_TOKEN.transfer(msg.sender,stakes[stakeId].amount), "Staking transfer failed");
-                require(REWARD_TOKEN.balanceOf(address(this)) > stakes[i].unclaimed, "Insuficient reward contract balance");
-                require(REWARD_TOKEN.transfer(msg.sender,stakes[i].unclaimed), "Reward transfer failed");
+                require(REWARD_TOKEN.transfer(msg.sender,stakes[stakeId].unclaimed), "Reward transfer failed");
                 stakes[stakeId] = stakes[stakes.length -1];
                 for(uint k = 0; k < ownerStakIds[stakes[stakeId].user].length; k++) {
                     if (ownerStakIds[stakes[stakeId].user][k] == stakes.length -1) {
