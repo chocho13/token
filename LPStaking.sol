@@ -25,7 +25,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
 
     address public constant REWARD_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    address public constant STAKING_TOKEN_ADDRESS = 0xDecB06cCa15031927Adb8B2e8773145646CFB564; // LP address
+    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // LP token address not known for the moment
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
     IERC20 private constant REWARD_TOKEN = IERC20(REWARD_TOKEN_ADDRESS);
     
