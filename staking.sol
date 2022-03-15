@@ -14,25 +14,28 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         uint unclaimed;
     }
 
-    Stake[] public stakes;
     mapping(address => uint[]) private ownerStakeIds;
 
+    Stake[] public stakes;
     uint public totalSupply;
     uint public totalStaked;
     bool public stakingAllowed;
     uint public lastUpdate;
+    uint public maxApr;
 
     uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
     uint public constant REWARD_PER_BLOCK = 0.6808 * 1e18;
+    uint public constant SECONDS_IN_YEAR = 31536000;
+
 
     address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
-    
     constructor() {
         lastUpdate = block.timestamp;
         totalSupply = 0;
         stakingAllowed = true;
+        maxApr = 500; // 500%
     }
 
     event Stacked(uint _amount,uint _totalSupply);
@@ -40,6 +43,12 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     event Claimed(uint _claimed);
     event StakingAllowed(bool _allow);
     event Updated(uint _lastupdate);
+    event AdjustMaxApr(uint _maxApr);
+
+    function adjustMaxApr(uint _maxApr) external onlyOwner returns (uint newMaxApr) {
+        emit AdjustMaxApr(_maxApr);
+        return maxApr = _maxApr;
+    }
 
     function allowStaking(bool _allow) external onlyOwner returns (bool allowed) {
         emit StakingAllowed(_allow);
@@ -118,11 +127,18 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     modifier updatePool() {
+        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 * 1e18;
+        uint rewardPerBlock;
+        if (REWARD_PER_BLOCK > maxRewardPerBlock) {
+            rewardPerBlock = maxRewardPerBlock / totalSupply;
+        } else {
+            rewardPerBlock = REWARD_PER_BLOCK / totalSupply;
+        }
         for(uint i = 0; i < stakes.length; i++) {
             if(stakes[i].stakingEndDate >= block.timestamp) {
-                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * REWARD_PER_BLOCK / totalSupply;
+                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * rewardPerBlock;
             } else if (lastUpdate < stakes[i].stakingEndDate) {
-                stakes[i].unclaimed += stakes[i].amount * (stakes[i].stakingEndDate - lastUpdate) * REWARD_PER_BLOCK / totalSupply;
+                stakes[i].unclaimed += stakes[i].amount * (stakes[i].stakingEndDate - lastUpdate) * rewardPerBlock;
             }
         }
         lastUpdate = block.timestamp;
