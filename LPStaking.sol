@@ -10,7 +10,6 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
     struct Stake {
         address user;
         uint amount;
-        uint stakingEndDate;
         uint unclaimed;
     }
 
@@ -62,7 +61,7 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
         require(_amount >= MINIMUM_AMOUNT, "Insuficient amount");
         require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        stakes.push(Stake(msg.sender, _amount, block.timestamp + 365 days,0));
+        stakes.push(Stake(msg.sender, _amount, 0));
         ownerStakeIds[msg.sender].push(stakes.length-1);
         totalSupply += _amount;
         emit Stacked(_amount,totalSupply);
@@ -86,32 +85,27 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
     }
 
     function unstake() external updatePool nonReentrant returns(uint totalReceived) {
-        uint i = 0;
         uint stakeId;
         uint stakedAmount = 0;
         uint unclaimedAmount = 0;
-        while(i < ownerStakeIds[msg.sender].length) {
+        for(uint i = 0; i < ownerStakeIds[msg.sender].length; i++) {
             stakeId = ownerStakeIds[msg.sender][i];
-            if (stakes[stakeId].stakingEndDate < block.timestamp) {
-                stakedAmount += stakes[stakeId].amount;
-                unclaimedAmount += stakes[stakeId].unclaimed;
-                require(STAKING_TOKEN.balanceOf(address(this)) > stakes[stakeId].amount, "Insuficient staking contract balance");
-                require(REWARD_TOKEN.balanceOf(address(this)) > stakes[stakeId].unclaimed, "Insuficient reward contract balance");
-                require(STAKING_TOKEN.transfer(msg.sender,stakes[stakeId].amount), "Staking transfer failed");
-                require(REWARD_TOKEN.transfer(msg.sender,stakes[stakeId].unclaimed), "Reward transfer failed");
-                totalSupply -= stakes[stakeId].amount;
-                stakes[stakeId] = stakes[stakes.length -1];
-                for(uint k = 0; k < ownerStakeIds[stakes[stakeId].user].length; k++) {
-                    if (ownerStakeIds[stakes[stakeId].user][k] == stakes.length -1) {
-                        ownerStakeIds[stakes[stakeId].user][k] = stakeId;
-                    }
+            stakedAmount += stakes[stakeId].amount;
+            unclaimedAmount += stakes[stakeId].unclaimed;
+            require(STAKING_TOKEN.balanceOf(address(this)) > stakes[stakeId].amount, "Insuficient staking contract balance");
+            require(REWARD_TOKEN.balanceOf(address(this)) > stakes[stakeId].unclaimed, "Insuficient reward contract balance");
+            require(STAKING_TOKEN.transfer(msg.sender,stakes[stakeId].amount), "Staking transfer failed");
+            require(REWARD_TOKEN.transfer(msg.sender,stakes[stakeId].unclaimed), "Reward transfer failed");
+            totalSupply -= stakes[stakeId].amount;
+            stakes[stakeId] = stakes[stakes.length -1];
+            for(uint k = 0; k < ownerStakeIds[stakes[stakeId].user].length; k++) {
+                if (ownerStakeIds[stakes[stakeId].user][k] == stakes.length -1) {
+                    ownerStakeIds[stakes[stakeId].user][k] = stakeId;
                 }
-                stakes.pop();
-                ownerStakeIds[msg.sender][i] = ownerStakeIds[msg.sender][ownerStakeIds[msg.sender].length -1];
-                ownerStakeIds[msg.sender].pop();
-            } else {
-                i++;
             }
+            stakes.pop();
+            ownerStakeIds[msg.sender][i] = ownerStakeIds[msg.sender][ownerStakeIds[msg.sender].length -1];
+            ownerStakeIds[msg.sender].pop();
         }
         require(stakedAmount > 0, "Nothing to unstake");
         emit Unstaked(stakedAmount);
@@ -125,11 +119,7 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
 
     modifier updatePool() {
         for(uint i = 0; i < stakes.length; i++) {
-            if(stakes[i].stakingEndDate >= block.timestamp) {
-                stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * rewardPerBlock / totalSupply;
-            } else if (lastUpdate < stakes[i].stakingEndDate) {
-                stakes[i].unclaimed += stakes[i].amount * (stakes[i].stakingEndDate - lastUpdate) * rewardPerBlock / totalSupply;
-            }
+            stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * rewardPerBlock / totalSupply;
         }
         lastUpdate = block.timestamp;
         emit Updated(lastUpdate);
