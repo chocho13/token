@@ -114,21 +114,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function getUserStakesIds(address _user) external view returns (uint[] memory) {
-        uint j = 0;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].user == _user) {
-                j++;
-            }
-        }
-        uint[] memory ids = new uint[](j);
-        j = 0;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].user == _user) {
-                ids[j] = i;
-                j++;
-            }
-        }
-        return ids;
+        return ownerStakeIds[_user];
     }
 
     modifier updatePool() {
