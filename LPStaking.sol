@@ -25,7 +25,7 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
     uint public constant MINIMUM_AMOUNT = 500 * 1e18;
 
     address public constant REWARD_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // LP token address not known for the moment
+    address public constant STAKING_TOKEN_ADDRESS = 0x469E0D351B868cb397967E57a00dc7DE082542A3; // LP token address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
     IERC20 private constant REWARD_TOKEN = IERC20(REWARD_TOKEN_ADDRESS);
     
@@ -120,21 +120,7 @@ contract LPStakingContract is Ownable, ReentrancyGuard {
     }
 
     function getUserStakesIds(address _user) external view returns (uint[] memory) {
-        uint j = 0;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].user == _user) {
-                j++;
-            }
-        }
-        uint[] memory ids = new uint[](j);
-        j = 0;
-        for(uint i = 0; i < stakes.length; i++) {
-            if (stakes[i].user == _user) {
-                ids[j] = i;
-                j++;
-            }
-        }
-        return ids;
+        return ownerStakeIds[_user];
     }
 
     modifier updatePool() {
