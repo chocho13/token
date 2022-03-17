@@ -33,7 +33,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public constant SECONDS_IN_YEAR = 31536000;
     uint public constant MIN_APR = 25;
 
-    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
+    address public constant STAKING_TOKEN_ADDRESS = 0x0498B7c793D7432Cd9dB27fb02fc9cfdBAfA1Fd3; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
     constructor() {
@@ -66,6 +66,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     function updateRewardPerBlock() external onlyOwner {
         _updateRewardPerBlock();
+        lastUpdatePoolSizePercent = totalSupply * 100 / MAX_SUPPLY;
     }
     function allowStaking(bool _allow) external onlyOwner {
         stakingAllowed = _allow;
@@ -82,7 +83,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     function claim() external nonReentrant {
         uint toClaim = _claimableRewards(msg.sender);
-        require(STAKING_TOKEN.balanceOf(address(this)) > toClaim, "Insuficient contract balance");
+        require(STAKING_TOKEN.balanceOf(address(this)) > toClaim + totalStaked, "Insuficient contract balance");
         require(STAKING_TOKEN.transfer(msg.sender,toClaim), "Transfer failed");
         emit Claimed(toClaim);
     }
@@ -103,10 +104,11 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
                 i++;
             }
         }
-        require(toUnstake >0, "Nothing to unstake"); 
+        require(toUnstake > 0, "Nothing to unstake"); 
         uint toClaim = _claimableRewards(msg.sender);
         require(STAKING_TOKEN.balanceOf(address(this)) > toUnstake + toClaim, "Insuficient contract balance");
         require(STAKING_TOKEN.transfer(msg.sender,toUnstake + toClaim), "Transfer failed");
+        totalStaked -= toUnstake; 
         emit Unstaked(toUnstake);
         emit Claimed(toClaim);
         return toUnstake + toClaim;
@@ -130,8 +132,9 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         totalStaked += _amount;
         stakesCount += 1;
         uint poolSizePercent = totalSupply * 100 / MAX_SUPPLY;
-        if (poolSizePercent < lastUpdatePoolSizePercent + 5) {
-            _updateRewardPerBlock;
+        if (poolSizePercent > lastUpdatePoolSizePercent + 5) {
+            _updateRewardPerBlock();
+            lastUpdatePoolSizePercent = poolSizePercent;
         }
         emit Stacked(_amount,totalSupply);
         return true;
@@ -168,4 +171,5 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         }
         return reward;
     }
+
 }
