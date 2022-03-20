@@ -39,9 +39,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     mapping(address => bool) private stakerAddressList;
 
 
-    //address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
-
+    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
     constructor() {
