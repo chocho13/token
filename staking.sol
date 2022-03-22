@@ -48,8 +48,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         maxApr = 500; // 500%
         stakesCount = 0;
         percentAutoUpdatePool = 5;
-
-        _updateRewardPerBlock(); // Initialize rewardPerBlockHistory
     }
 
     event Staked(uint _amount, uint _totalSupply);
