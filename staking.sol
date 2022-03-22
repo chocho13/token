@@ -14,7 +14,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     Struct[] public rewardPerBlockHistory;
 
-    mapping(address => uint[]) private ownerStakeIds;
+    mapping(address => uint[]) private userStakeIds;
 
     mapping(uint => address) public stakingUser;
     mapping(uint => uint) public stakingAmount;
@@ -22,8 +22,8 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     mapping(uint => uint) public stakingLastClaim;
 
     uint public stakesCount;
-    uint public totalSupply;
-    uint public totalStaked;
+    uint public totalSupply; // Doesn't decrease on unstake
+    uint public totalStaked; // Decreases on unstake
     bool public stakingAllowed;
     uint public lastUpdatePoolSizePercent;
     uint public maxApr;
@@ -34,10 +34,9 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public constant REWARD_PER_BLOCK = 0.000008 * 1e18;
     uint public constant SECONDS_IN_YEAR = 31536000;
     uint public constant MIN_APR = 25;
-
+    uint public constant STAKING_LENGTH = 365 days;
 
     mapping(address => bool) private stakerAddressList;
-
 
     address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
@@ -51,7 +50,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         percentAutoUpdatePool = 5;
     }
 
-    event Stacked(uint _amount,uint _totalSupply);
+    event Staked(uint _amount, uint _totalSupply);
     event Unstaked(uint _amount);
     event Claimed(uint _claimed);
     event StakingAllowed(bool _allow);
@@ -69,7 +68,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         stakerAddressList[_addr] = false;
         emit UpdatedStaker(_addr, false);
     }
-    
+
     function isStakerAddress(address check) public view returns(bool isIndeed) {
         return stakerAddressList[check];
     }
@@ -95,24 +94,24 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function stake(uint _amount) external {
-        _stake(_amount,msg.sender);
+        _stake(_amount, msg.sender);
     }
 
-    function stakForSomeoneElse(uint _amount,address _user) external {
-        require(isStakerAddress(msg.sender), "stakers allowed only");
-        _stake(_amount,_user);
+    function stakeForSomeoneElse(uint _amount, address _user) external {
+        require(isStakerAddress(msg.sender), "Stakers allowed only");
+        _stake(_amount, _user);
     }
     function recompound() external nonReentrant {
         uint toClaim = claimableRewards(msg.sender);
-        require(toClaim >= MINIMUM_AMOUNT,"Insuficient amount");
-        _stake(toClaim,msg.sender);
+        require(toClaim >= MINIMUM_AMOUNT, "Insuficient amount");
+        _stake(toClaim, msg.sender);
         _updateLastClaim();
     }
 
     function claim() external nonReentrant {
         uint toClaim = claimableRewards(msg.sender);
         require(STAKING_TOKEN.balanceOf(address(this)) > toClaim + totalStaked, "Insuficient contract balance");
-        require(STAKING_TOKEN.transfer(msg.sender,toClaim), "Transfer failed");
+        require(STAKING_TOKEN.transfer(msg.sender, toClaim), "Transfer failed");
         _updateLastClaim();
         emit Claimed(toClaim);
     }
@@ -122,22 +121,21 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         uint i = 0;
         uint stakeId;
         uint toClaim = claimableRewards(msg.sender);
-        while(i < ownerStakeIds[msg.sender].length) {
-            stakeId = ownerStakeIds[msg.sender][i];
+        while(i < userStakeIds[msg.sender].length) {
+            stakeId = userStakeIds[msg.sender][i];
             if (stakingEndDate[stakeId] < block.timestamp) {
                 toUnstake += stakingAmount[stakeId];
-                totalStaked -= stakingAmount[stakeId];
                 stakingAmount[stakeId] = 0;
-                ownerStakeIds[msg.sender][i] = ownerStakeIds[msg.sender][ownerStakeIds[msg.sender].length -1];
-                ownerStakeIds[msg.sender].pop();
+                userStakeIds[msg.sender][i] = userStakeIds[msg.sender][userStakeIds[msg.sender].length - 1];
+                userStakeIds[msg.sender].pop();
             } else {
                 i++;
             }
         }
         require(toUnstake > 0, "Nothing to unstake"); 
         require(STAKING_TOKEN.balanceOf(address(this)) > toUnstake + toClaim, "Insuficient contract balance");
-        require(STAKING_TOKEN.transfer(msg.sender,toUnstake + toClaim), "Transfer failed");
-        totalStaked -= toUnstake; 
+        require(STAKING_TOKEN.transfer(msg.sender, toUnstake + toClaim), "Transfer failed");
+        totalStaked -= toUnstake;
         _updateLastClaim();
         emit Unstaked(toUnstake);
         emit Claimed(toClaim);
@@ -145,14 +143,14 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function getUserStakesIds(address _user) external view returns (uint[] memory) {
-        return ownerStakeIds[_user];
+        return userStakeIds[_user];
     }
 
     function claimableRewards(address _user) public view returns (uint) {
         uint reward = 0;
         uint stakeId;
-        for(uint i = 0; i < ownerStakeIds[_user].length; i++) {
-            stakeId = ownerStakeIds[_user][i];
+        for(uint i = 0; i < userStakeIds[_user].length; i++) {
+            stakeId = userStakeIds[_user][i];
             uint lastClaim = stakingLastClaim[stakeId];
             uint j;
             for(j = 0; j < rewardPerBlockHistory.length; j++) {
@@ -167,22 +165,23 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateLastClaim() internal {
-        for(uint i = 0; i < ownerStakeIds[msg.sender].length; i++) {
-            stakingLastClaim[ownerStakeIds[msg.sender][i]] = block.timestamp;
+        for(uint i = 0; i < userStakeIds[msg.sender].length; i++) {
+            stakingLastClaim[userStakeIds[msg.sender][i]] = block.timestamp;
         }
     }
 
     function _stake(uint _amount, address _user) internal nonReentrant {
         require(stakingAllowed, "Staking is not enabled");
-        require(_amount >= MINIMUM_AMOUNT, "Insuficient amount");
+        require(_amount >= MINIMUM_AMOUNT, "Insuficient stake amount");
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        require(ownerStakeIds[_user].length < 100, "User staking limit exceeded");
+        require(userStakeIds[_user].length < 100, "User stakings limit exceeded");
+
         stakingUser[stakesCount] = _user;
-        stakingEndDate[stakesCount] = block.timestamp + 365 days;
+        stakingEndDate[stakesCount] = block.timestamp + STAKING_LENGTH;
         stakingLastClaim[stakesCount] = block.timestamp;
-        ownerStakeIds[_user].push(stakesCount);
+        userStakeIds[_user].push(stakesCount);
         totalSupply += _amount;
         totalStaked += _amount;
         stakesCount += 1;
@@ -191,13 +190,14 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             _updateRewardPerBlock();
             lastUpdatePoolSizePercent = poolSizePercent;
         }
-        emit Stacked(_amount,totalSupply);
+        emit Staked(_amount, totalSupply);
     }
 
     function _updateRewardPerBlock() internal {
         uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 * 1e18;
         uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100 * 1e18;
         uint rewardPerBlock;
+ 
         if (REWARD_PER_BLOCK < minRewardPerBlock) {
             rewardPerBlock = minRewardPerBlock / totalSupply;
         } else if (REWARD_PER_BLOCK > maxRewardPerBlock) {
@@ -205,6 +205,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         } else {
             rewardPerBlock = REWARD_PER_BLOCK / totalSupply;
         }
-        rewardPerBlockHistory.push(Struct(block.timestamp,rewardPerBlock));
+        rewardPerBlockHistory.push(Struct(block.timestamp, rewardPerBlock));
         emit RewardPerBlockUpdatedTimestamp(block.timestamp);
     }}
