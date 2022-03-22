@@ -48,6 +48,8 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         maxApr = 500; // 500%
         stakesCount = 0;
         percentAutoUpdatePool = 5;
+
+        _updateRewardPerBlock(); // Initialize rewardPerBlockHistory
     }
 
     event Staked(uint _amount, uint _totalSupply);
@@ -153,13 +155,16 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             stakeId = userStakeIds[_user][i];
             uint lastClaim = stakingLastClaim[stakeId];
             uint j;
-            for(j = 0; j < rewardPerBlockHistory.length; j++) {
+            for(j = 1; j < rewardPerBlockHistory.length; j++) {
                 if (rewardPerBlockHistory[j].timestamp > lastClaim) {
-                    reward += stakingAmount[stakeId] * (rewardPerBlockHistory[j].timestamp - lastClaim) * rewardPerBlockHistory[j].rewardPerBlock;
+                    reward += stakingAmount[stakeId] * (rewardPerBlockHistory[j].timestamp - lastClaim) * rewardPerBlockHistory[j-1].rewardPerBlock;
                     lastClaim = rewardPerBlockHistory[j].timestamp;
                 }
             }
-            reward += stakingAmount[stakeId] * (lastClaim - block.timestamp) * rewardPerBlockHistory[j].rewardPerBlock;
+
+            if (block.timestamp > lastClaim) {
+                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length].rewardPerBlock;
+            }
         }
         return (reward);
     }
