@@ -31,14 +31,14 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
     uint public constant MINIMUM_AMOUNT = 1 * 1e18;
-    uint public constant REWARD_PER_BLOCK = 0.000008 * 1e18;
+    uint public constant REWARD_PER_BLOCK = 0.634 * 1e18;
     uint public constant SECONDS_IN_YEAR = 31536000;
     uint public constant MIN_APR = 25;
     uint public constant STAKING_LENGTH = 365 days;
 
     mapping(address => bool) private stakerAddressList;
 
-    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
+    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
     constructor() {
@@ -155,16 +155,16 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             uint j;
             for(j = 1; j < rewardPerBlockHistory.length; j++) {
                 if (rewardPerBlockHistory[j].timestamp > lastClaim) {
-                    reward += stakingAmount[stakeId] * (rewardPerBlockHistory[j].timestamp - lastClaim) * rewardPerBlockHistory[j-1].rewardPerBlock;
+                    reward += stakingAmount[stakeId] * (rewardPerBlockHistory[j].timestamp - lastClaim) * rewardPerBlockHistory[j-1].rewardPerBlock / totalSupply;
                     lastClaim = rewardPerBlockHistory[j].timestamp;
                 }
             }
 
             if (block.timestamp > lastClaim) {
-                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length].rewardPerBlock;
+                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length -1].rewardPerBlock / totalSupply;
             }
         }
-        return (reward);
+        return reward;
     }
 
     function _updateLastClaim() internal {
@@ -184,6 +184,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         stakingUser[stakesCount] = _user;
         stakingEndDate[stakesCount] = block.timestamp + STAKING_LENGTH;
         stakingLastClaim[stakesCount] = block.timestamp;
+        stakingAmount[stakesCount] = _amount;
         userStakeIds[_user].push(stakesCount);
         totalSupply += _amount;
         totalStaked += _amount;
@@ -201,17 +202,18 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateRewardPerBlock() internal {
-        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 * 1e18;
-        uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100 * 1e18;
+        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 ;
+        uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100 ;
         uint rewardPerBlock;
  
         if (REWARD_PER_BLOCK < minRewardPerBlock) {
-            rewardPerBlock = minRewardPerBlock / totalSupply;
+            rewardPerBlock = minRewardPerBlock;
         } else if (REWARD_PER_BLOCK > maxRewardPerBlock) {
-            rewardPerBlock = maxRewardPerBlock / totalSupply;
+            rewardPerBlock = maxRewardPerBlock;
         } else {
-            rewardPerBlock = REWARD_PER_BLOCK / totalSupply;
+            rewardPerBlock = REWARD_PER_BLOCK;
         }
         rewardPerBlockHistory.push(Struct(block.timestamp, rewardPerBlock));
         emit RewardPerBlockUpdatedTimestamp(block.timestamp);
-    }}
+    }
+}
