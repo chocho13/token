@@ -161,7 +161,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             }
 
             if (block.timestamp > lastClaim) {
-                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length].rewardPerBlock;
+                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length-1].rewardPerBlock;
             }
         }
         return (reward);
@@ -182,6 +182,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(userStakeIds[_user].length < 100, "User stakings limit exceeded");
 
         stakingUser[stakesCount] = _user;
+        stakingAmount[stakesCount] = _amount;
         stakingEndDate[stakesCount] = block.timestamp + STAKING_LENGTH;
         stakingLastClaim[stakesCount] = block.timestamp;
         userStakeIds[_user].push(stakesCount);
@@ -201,10 +202,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateRewardPerBlock() internal {
-        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 * 1e18;
-        uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100 * 1e18;
+        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100;
+        uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100;
         uint rewardPerBlock;
- 
+
         if (REWARD_PER_BLOCK < minRewardPerBlock) {
             rewardPerBlock = minRewardPerBlock / totalSupply;
         } else if (REWARD_PER_BLOCK > maxRewardPerBlock) {
