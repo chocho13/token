@@ -125,7 +125,6 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             stakeId = userStakeIds[msg.sender][i];
             if (stakingEndDate[stakeId] < block.timestamp) {
                 toUnstake += stakingAmount[stakeId];
-                totalStaked -= stakingAmount[stakeId];
                 stakingAmount[stakeId] = 0;
                 userStakeIds[msg.sender][i] = userStakeIds[msg.sender][userStakeIds[msg.sender].length - 1];
                 userStakeIds[msg.sender].pop();
