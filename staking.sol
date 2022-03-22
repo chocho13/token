@@ -9,10 +9,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     struct Struct {
         uint timestamp;
-        uint rewardPerBlock;
+        uint apr;
     }
 
-    Struct[] public rewardPerBlockHistory;
+    Struct[] public aprHistory;
 
     mapping(address => uint[]) private userStakeIds;
 
@@ -29,12 +29,15 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public maxApr;
     uint public percentAutoUpdatePool;
 
+    uint public constant POOL_SIZE = 20 * 1e6 * 1e18;
     uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
-    uint public constant MINIMUM_AMOUNT = 1 * 1e18;
-    uint public constant REWARD_PER_BLOCK = 0.634 * 1e18;
-    uint public constant SECONDS_IN_YEAR = 31536000;
-    uint public constant MIN_APR = 25;
     uint public constant STAKING_LENGTH = 365 days;
+    uint public constant STAKING_YEARS = 1;
+    uint public constant MIN_APR = 25; // 25 % = POOL_SIZE / MAX_SUPPLY / STAKING_YEARS * 100
+    uint public constant DEFAULT_MAX_APR = 500; // 500%
+
+    uint public constant MINIMUM_AMOUNT = 500 * 1e18;
+    uint public constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
 
     mapping(address => bool) private stakerAddressList;
 
@@ -45,7 +48,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
         stakingAllowed = true;
-        maxApr = 500; // 500%
+        maxApr = DEFAULT_MAX_APR;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
     }
@@ -54,7 +57,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     event Unstaked(uint _amount);
     event Claimed(uint _claimed);
     event StakingAllowed(bool _allow);
-    event RewardPerBlockUpdatedTimestamp(uint _lastupdate);
+    event AprUpdatedTimestamp(uint _lastupdate);
     event AdjustMaxApr(uint _maxApr);
     event AdjustpercentAutoUpdatePool(uint _percentAutoUpdatePool);
     event UpdatedStaker(address _staker, bool _allowed);
@@ -83,8 +86,8 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         emit AdjustMaxApr(percentAutoUpdatePool);
     }
 
-    function updateRewardPerBlock() external onlyOwner {
-        _updateRewardPerBlock();
+    function updateApr() external onlyOwner {
+        _updateApr();
         lastUpdatePoolSizePercent = totalSupply * 100 / MAX_SUPPLY;
     }
 
@@ -153,15 +156,15 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             stakeId = userStakeIds[_user][i];
             uint lastClaim = stakingLastClaim[stakeId];
             uint j;
-            for(j = 1; j < rewardPerBlockHistory.length; j++) {
-                if (rewardPerBlockHistory[j].timestamp > lastClaim) {
-                    reward += stakingAmount[stakeId] * (rewardPerBlockHistory[j].timestamp - lastClaim) * rewardPerBlockHistory[j-1].rewardPerBlock / totalSupply;
-                    lastClaim = rewardPerBlockHistory[j].timestamp;
+            for(j = 1; j < aprHistory.length; j++) {
+                if (aprHistory[j].timestamp > lastClaim) {
+                    reward += stakingAmount[stakeId] * (aprHistory[j].timestamp - lastClaim) * aprHistory[j-1].apr / 100 / SECONDS_IN_YEAR;
+                    lastClaim = aprHistory[j].timestamp;
                 }
             }
 
             if (block.timestamp > lastClaim) {
-                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * rewardPerBlockHistory[rewardPerBlockHistory.length -1].rewardPerBlock / totalSupply;
+                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * aprHistory[aprHistory.length -1].apr / 100 / SECONDS_IN_YEAR;
             }
         }
         return reward;
@@ -191,29 +194,24 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         stakesCount += 1;
         uint poolSizePercent = totalSupply * 100 / MAX_SUPPLY;
         if (stakesCount == 1) {
-            _updateRewardPerBlock();
+            _updateApr();
             lastUpdatePoolSizePercent = poolSizePercent;
         }
         if (poolSizePercent > lastUpdatePoolSizePercent + percentAutoUpdatePool) {
-            _updateRewardPerBlock();
+            _updateApr();
             lastUpdatePoolSizePercent = poolSizePercent;
         }
         emit Staked(_amount, totalSupply);
     }
 
-    function _updateRewardPerBlock() internal {
-        uint maxRewardPerBlock = totalSupply * maxApr / SECONDS_IN_YEAR / 100 ;
-        uint minRewardPerBlock = totalSupply * MIN_APR / SECONDS_IN_YEAR / 100 ;
-        uint rewardPerBlock;
- 
-        if (REWARD_PER_BLOCK < minRewardPerBlock) {
-            rewardPerBlock = minRewardPerBlock;
-        } else if (REWARD_PER_BLOCK > maxRewardPerBlock) {
-            rewardPerBlock = maxRewardPerBlock;
-        } else {
-            rewardPerBlock = REWARD_PER_BLOCK;
+    function _updateApr() internal {
+        uint apr = POOL_SIZE / totalSupply / STAKING_YEARS * 100;
+        if (apr < MIN_APR) {
+            apr = MIN_APR;
+        } else if (apr > maxApr) {
+            apr = maxApr;
         }
-        rewardPerBlockHistory.push(Struct(block.timestamp, rewardPerBlock));
-        emit RewardPerBlockUpdatedTimestamp(block.timestamp);
+        aprHistory.push(Struct(block.timestamp, apr));
+        emit AprUpdatedTimestamp(block.timestamp);
     }
 }
