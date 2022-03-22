@@ -191,6 +191,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         totalStaked += _amount;
         stakesCount += 1;
         uint poolSizePercent = totalSupply * 100 / MAX_SUPPLY;
+        if (stakesCount == 1) {
+            _updateRewardPerBlock();
+            lastUpdatePoolSizePercent = poolSizePercent;
+        }
         if (poolSizePercent > lastUpdatePoolSizePercent + percentAutoUpdatePool) {
             _updateRewardPerBlock();
             lastUpdatePoolSizePercent = poolSizePercent;
