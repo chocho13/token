@@ -5,20 +5,19 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract OneYearStakingContract is Ownable, ReentrancyGuard {
+contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
 
-    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
+    address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
-    uint public constant POOL_SIZE = 20 * 1e6 * 1e18;
-    uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
-    uint public constant STAKING_LENGTH = 2 minutes; // TODO 365 days
-    uint public constant STAKING_YEARS = 1;
-    uint public constant MIN_APR = 25; // 25 % = 100 * POOL_SIZE / MAX_SUPPLY / STAKING_YEARS
-    uint public constant DEFAULT_MAX_APR = 500; // 500%
+    uint public constant POOL_SIZE = 4.2 * 1e6 * 1e18;
+    uint public constant MAX_SUPPLY = 42 * 1e6 * 1e18;
+    uint public constant STAKING_DURATION = 182 days; // 6 month
+    uint public constant MIN_APR = 20; // 20 % = 10000 * POOL_SIZE / MAX_SUPPLY / STAKING_YEARS_PERCENT
+    uint public constant MINIMUM_AMOUNT = 500 * 1e18; // TODO 500
 
-    uint public constant MINIMUM_AMOUNT = 1 * 1e18; // TODO 500
-    uint public constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
+    uint private constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
+    uint private constant STAKING_YEARS_PERCENT = 50;
 
     mapping(address => uint[]) private userStakeIds;
 
@@ -48,10 +47,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
         stakingAllowed = true; // TODO false
-        maxApr = DEFAULT_MAX_APR;
+        maxApr = 500;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
-        aprHistory.push(Struct(block.timestamp, DEFAULT_MAX_APR));
+        aprHistory.push(Struct(block.timestamp, maxApr));
     }
 
     event Staked(uint _amount, uint _totalSupply);
@@ -207,7 +206,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
         stakingUser[stakesCount] = _user;
         stakingAmount[stakesCount] = _amount;
-        stakingEndDate[stakesCount] = block.timestamp + STAKING_LENGTH;
+        stakingEndDate[stakesCount] = block.timestamp + STAKING_DURATION;
         stakingLastClaim[stakesCount] = block.timestamp;
         userStakeIds[_user].push(stakesCount);
         totalSupply += _amount;
@@ -222,7 +221,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateApr() internal {
-        uint apr = 100 * POOL_SIZE / totalSupply / STAKING_YEARS;
+        uint apr = 10000 * POOL_SIZE / totalSupply / STAKING_YEARS_PERCENT;
         if (apr < MIN_APR) {
             apr = MIN_APR;
         } else if (apr > maxApr) {
