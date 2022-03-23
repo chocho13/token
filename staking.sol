@@ -7,12 +7,18 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
-    struct Struct {
-        uint timestamp;
-        uint apr;
-    }
+    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
+    IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
-    Struct[] public aprHistory;
+    uint public constant POOL_SIZE = 20 * 1e6 * 1e18;
+    uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
+    uint public constant STAKING_LENGTH = 2 minutes; // TODO 365 days
+    uint public constant STAKING_YEARS = 1;
+    uint public constant MIN_APR = 25; // 25 % = 100 * POOL_SIZE / MAX_SUPPLY / STAKING_YEARS
+    uint public constant DEFAULT_MAX_APR = 500; // 500%
+
+    uint public constant MINIMUM_AMOUNT = 1 * 1e18; // TODO 500
+    uint public constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
 
     mapping(address => uint[]) private userStakeIds;
 
@@ -29,28 +35,23 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     uint public maxApr;
     uint public percentAutoUpdatePool;
 
-    uint public constant POOL_SIZE = 20 * 1e6 * 1e18;
-    uint public constant MAX_SUPPLY = 80 * 1e6 * 1e18;
-    uint public constant STAKING_LENGTH = 365 days;
-    uint public constant STAKING_YEARS = 1;
-    uint public constant MIN_APR = 25; // 25 % = POOL_SIZE / MAX_SUPPLY / STAKING_YEARS * 100
-    uint public constant DEFAULT_MAX_APR = 500; // 500%
+    struct Struct {
+        uint timestamp;
+        uint apr;
+    }
 
-    uint public constant MINIMUM_AMOUNT = 500 * 1e18;
-    uint public constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
+    Struct[] public aprHistory;
 
     mapping(address => bool) private stakerAddressList;
-
-    address public constant STAKING_TOKEN_ADDRESS = 0xd9145CCE52D386f254917e481eB44e9943F39138; // galeon address
-    IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
     constructor() {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
-        stakingAllowed = true;
+        stakingAllowed = true; // TODO false
         maxApr = DEFAULT_MAX_APR;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
+        aprHistory.push(Struct(block.timestamp, DEFAULT_MAX_APR));
     }
 
     event Staked(uint _amount, uint _totalSupply);
@@ -104,15 +105,17 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(isStakerAddress(msg.sender), "Stakers allowed only");
         _stake(_amount, _user);
     }
-    function recompound() external nonReentrant {
-        uint toClaim = claimableRewards(msg.sender);
+
+    function recompound() external {
+        uint toClaim = getClaimableRewards(msg.sender);
         require(toClaim >= MINIMUM_AMOUNT, "Insuficient amount");
         _stake(toClaim, msg.sender);
         _updateLastClaim();
     }
 
     function claim() external nonReentrant {
-        uint toClaim = claimableRewards(msg.sender);
+        uint toClaim = getClaimableRewards(msg.sender);
+        require(toClaim > 0, "Nothing to claim");
         require(STAKING_TOKEN.balanceOf(address(this)) > toClaim + totalStaked, "Insuficient contract balance");
         require(STAKING_TOKEN.transfer(msg.sender, toClaim), "Transfer failed");
         _updateLastClaim();
@@ -123,8 +126,8 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         uint toUnstake = 0;
         uint i = 0;
         uint stakeId;
-        uint toClaim = claimableRewards(msg.sender);
-        while(i < userStakeIds[msg.sender].length) {
+        uint toClaim = getClaimableRewards(msg.sender);
+        while (i < userStakeIds[msg.sender].length) {
             stakeId = userStakeIds[msg.sender][i];
             if (stakingEndDate[stakeId] < block.timestamp) {
                 toUnstake += stakingAmount[stakeId];
@@ -149,29 +152,47 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         return userStakeIds[_user];
     }
 
-    function claimableRewards(address _user) public view returns (uint) {
+    function getCurrentApr() public view returns (uint) {
+        return aprHistory[aprHistory.length - 1].apr;
+    }
+
+    function getClaimableRewards(address _user) public view returns (uint) {
         uint reward = 0;
         uint stakeId;
-        for(uint i = 0; i < userStakeIds[_user].length; i++) {
+        for (uint i = 0; i < userStakeIds[_user].length; i++) {
             stakeId = userStakeIds[_user][i];
             uint lastClaim = stakingLastClaim[stakeId];
+            uint endDate = stakingEndDate[stakeId];
+
+            uint until = block.timestamp;
+            if (endDate < block.timestamp) {
+                until = endDate;
+            }
+
             uint j;
-            for(j = 1; j < aprHistory.length; j++) {
+            for (j = 1; j < aprHistory.length; j++) {
                 if (aprHistory[j].timestamp > lastClaim) {
-                    reward += stakingAmount[stakeId] * (aprHistory[j].timestamp - lastClaim) * aprHistory[j-1].apr / 100 / SECONDS_IN_YEAR;
-                    lastClaim = aprHistory[j].timestamp;
+
+                    uint interval = aprHistory[j].timestamp - lastClaim;
+                    if (until < aprHistory[j].timestamp) {
+                        interval = until - lastClaim > 0 ? until - lastClaim : 0;
+                    }
+
+                    reward += stakingAmount[stakeId] * interval * aprHistory[j-1].apr / 100 / SECONDS_IN_YEAR;
+                    lastClaim = until < aprHistory[j].timestamp ? until : aprHistory[j].timestamp;
                 }
             }
 
-            if (block.timestamp > lastClaim) {
-                reward += stakingAmount[stakeId] * (block.timestamp - lastClaim) * aprHistory[aprHistory.length -1].apr / 100 / SECONDS_IN_YEAR;
+            if (until > lastClaim) {
+                uint interval = until - lastClaim > 0 ? until - lastClaim : 0;
+                reward += stakingAmount[stakeId] * interval * aprHistory[aprHistory.length - 1].apr / 100 / SECONDS_IN_YEAR;
             }
         }
         return reward;
     }
 
     function _updateLastClaim() internal {
-        for(uint i = 0; i < userStakeIds[msg.sender].length; i++) {
+        for (uint i = 0; i < userStakeIds[msg.sender].length; i++) {
             stakingLastClaim[userStakeIds[msg.sender][i]] = block.timestamp;
         }
     }
@@ -185,18 +206,14 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         require(userStakeIds[_user].length < 100, "User stakings limit exceeded");
 
         stakingUser[stakesCount] = _user;
+        stakingAmount[stakesCount] = _amount;
         stakingEndDate[stakesCount] = block.timestamp + STAKING_LENGTH;
         stakingLastClaim[stakesCount] = block.timestamp;
-        stakingAmount[stakesCount] = _amount;
         userStakeIds[_user].push(stakesCount);
         totalSupply += _amount;
         totalStaked += _amount;
         stakesCount += 1;
         uint poolSizePercent = totalSupply * 100 / MAX_SUPPLY;
-        if (stakesCount == 1) {
-            _updateApr();
-            lastUpdatePoolSizePercent = poolSizePercent;
-        }
         if (poolSizePercent > lastUpdatePoolSizePercent + percentAutoUpdatePool) {
             _updateApr();
             lastUpdatePoolSizePercent = poolSizePercent;
@@ -205,7 +222,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateApr() internal {
-        uint apr = POOL_SIZE / totalSupply / STAKING_YEARS * 100;
+        uint apr = 100 * POOL_SIZE / totalSupply / STAKING_YEARS;
         if (apr < MIN_APR) {
             apr = MIN_APR;
         } else if (apr > maxApr) {
