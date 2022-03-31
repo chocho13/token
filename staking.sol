@@ -153,7 +153,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
         return userStakeIds[_user];
     }
 
-    function getCurrentApr() private view returns (uint) {
+    function getCurrentApr() external view returns (uint) {
         return aprHistory[aprHistory.length - 1].apr;
     }
 
