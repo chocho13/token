@@ -57,17 +57,18 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     event Unstaked(uint _amount);
     event Claimed(uint _claimed);
     event StakingAllowed(bool _allow);
-    event AprUpdatedTimestamp(uint _lastupdate);
+    event AprUpdated(uint _lastupdate, uint _apr);
     event AdjustMaxApr(uint _maxApr);
     event AdjustpercentAutoUpdatePool(uint _percentAutoUpdatePool);
     event UpdatedStaker(address _staker, bool _allowed);
+    event LastClaim(address _staker, uint _lastClaim);
 
-    function addStakerAddress(address _addr) public onlyOwner {
+    function addStakerAddress(address _addr) external onlyOwner {
         stakerAddressList[_addr] = true;
         emit UpdatedStaker(_addr, true);
     }
 
-    function delStakerAddress(address _addr) public onlyOwner {
+    function delStakerAddress(address _addr) external onlyOwner {
         stakerAddressList[_addr] = false;
         emit UpdatedStaker(_addr, false);
     }
@@ -101,6 +102,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     }
 
     function stakeForSomeoneElse(uint _amount, address _user) external {
+        require(_user != address(0), "0x address not allowed");
         require(isStakerAddress(msg.sender), "Stakers allowed only");
         _stake(_amount, _user);
     }
@@ -151,7 +153,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
         return userStakeIds[_user];
     }
 
-    function getCurrentApr() public view returns (uint) {
+    function getCurrentApr() private view returns (uint) {
         return aprHistory[aprHistory.length - 1].apr;
     }
 
@@ -174,7 +176,8 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
 
                     uint interval = aprHistory[j].timestamp - lastClaim;
                     if (until < aprHistory[j].timestamp) {
-                        interval = until - lastClaim > 0 ? until - lastClaim : 0;
+                        interval = until - lastClaim;
+                        //  > 0 ? until - lastClaim : 0;
                     }
 
                     reward += stakingAmount[stakeId] * interval * aprHistory[j-1].apr / 100 / SECONDS_IN_YEAR;
@@ -183,7 +186,8 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
             }
 
             if (until > lastClaim) {
-                uint interval = until - lastClaim > 0 ? until - lastClaim : 0;
+                uint interval = until - lastClaim;
+                //  > 0 ? until - lastClaim : 0;
                 reward += stakingAmount[stakeId] * interval * aprHistory[aprHistory.length - 1].apr / 100 / SECONDS_IN_YEAR;
             }
         }
@@ -194,6 +198,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
         for (uint i = 0; i < userStakeIds[msg.sender].length; i++) {
             stakingLastClaim[userStakeIds[msg.sender][i]] = block.timestamp;
         }
+        emit LastClaim(msg.sender,block.timestamp);
     }
 
     function _stake(uint _amount, address _user) internal nonReentrant {
@@ -221,6 +226,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     }
 
     function _updateApr() internal {
+        require(totalSupply > 0, "0 division protection");
         uint apr = 10000 * POOL_SIZE / totalSupply / STAKING_YEARS_PERCENT;
         if (apr < MIN_APR) {
             apr = MIN_APR;
@@ -228,6 +234,6 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
             apr = maxApr;
         }
         aprHistory.push(Struct(block.timestamp, apr));
-        emit AprUpdatedTimestamp(block.timestamp);
+        emit AprUpdated(block.timestamp, apr);
     }
 }
