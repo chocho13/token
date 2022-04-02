@@ -53,8 +53,8 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     constructor() {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
-        stakingAllowed = true; // TODO false
-        maxApr = 500;
+        stakingAllowed = false; // TODO false
+        maxApr = 400;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
         aprHistory.push(Struct(block.timestamp, maxApr));
