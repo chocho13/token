@@ -193,8 +193,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
 
                     uint interval = aprHistory[j].timestamp - lastClaim;
                     if (until < aprHistory[j].timestamp) {
-                        interval = until - lastClaim;
-                        //  > 0 ? until - lastClaim : 0;
+                        interval = until > lastClaim ? until - lastClaim : 0;
                     }
 
                     reward += stakingAmount[stakeId] * interval * aprHistory[j-1].apr / 100 / SECONDS_IN_YEAR;
@@ -203,8 +202,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
             }
 
             if (until > lastClaim) {
-                uint interval = until - lastClaim;
-                //  > 0 ? until - lastClaim : 0;
+                uint interval = until > lastClaim ? until - lastClaim : 0;
                 reward += stakingAmount[stakeId] * interval * aprHistory[aprHistory.length - 1].apr / 100 / SECONDS_IN_YEAR;
             }
         }
