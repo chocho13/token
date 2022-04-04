@@ -10,7 +10,7 @@ contract ThreeYearsStakingContract is Ownable, ReentrancyGuard {
     address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
-    uint public constant POOL_SIZE = 240 * 1e6 * 1e18;
+    uint public constant POOL_SIZE = 180 * 1e6 * 1e18;
     uint public constant MAX_SUPPLY = 200 * 1e6 * 1e18;
     uint public constant STAKING_DURATION = 1095 days; // 3 years
     uint public constant MIN_APR = 30; // 30 % = 10000 * POOL_SIZE / MAX_SUPPLY / STAKING_YEARS_PERCENT
