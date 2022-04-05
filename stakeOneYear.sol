@@ -60,7 +60,7 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     constructor() {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
-        stakingAllowed = true; // TODO false
+        stakingAllowed = false; // TODO false
         maxApr = 450;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
@@ -123,20 +123,13 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
     }
 
     function recompound() external {
-        uint toClaim = getClaimableRewards(msg.sender);
-        require(toClaim >= MINIMUM_AMOUNT, "Insuficient amount");
-        _stake(toClaim, msg.sender);
-        _updateLastClaim();
-        emit ReStaked(toClaim);
+        uint toRestak = _claim(MINIMUM_AMOUNT);
+        _stake(toRestak, msg.sender);
+        emit ReStaked(toRestak);
     }
 
-    function claim() external nonReentrant {
-        uint toClaim = getClaimableRewards(msg.sender);
-        require(toClaim > 0, "Nothing to claim");
-        require(STAKING_TOKEN.balanceOf(address(this)) > toClaim + totalStaked, "Insuficient contract balance");
-        require(STAKING_TOKEN.transfer(msg.sender, toClaim), "Transfer failed");
-        _updateLastClaim();
-        emit Claimed(toClaim);
+    function claim() external {
+        emit Claimed(_claim(0));
     }
 
     function unstake() external nonReentrant returns(uint) {
@@ -251,6 +244,15 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
             lastUpdatePoolSizePercent = poolSizePercent;
         }
         emit Staked(_amount, totalSupply);
+    }
+
+    function _claim(uint _min) internal nonReentrant returns (uint) {
+        uint toClaim = getClaimableRewards(msg.sender);
+        require(toClaim > _min, "Insuficient amout to claim");
+        require(STAKING_TOKEN.balanceOf(address(this)) > toClaim + totalStaked, "Insuficient contract balance");
+        require(STAKING_TOKEN.transfer(msg.sender, toClaim), "Transfer failed");
+        _updateLastClaim();
+        return toClaim;
     }
 
     function _updateApr() internal {
