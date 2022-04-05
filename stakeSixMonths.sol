@@ -52,7 +52,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
         uint stakesCount;
         uint totalSupply;
     }
-    
+
     Struct[] public aprHistory;
 
     mapping(address => bool) private stakerAddressList;
@@ -60,7 +60,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     constructor() {
         totalSupply = 0;
         lastUpdatePoolSizePercent = 0;
-        stakingAllowed = false; // TODO false
+        stakingAllowed = true; // TODO false
         maxApr = 400;
         stakesCount = 0;
         percentAutoUpdatePool = 5;
@@ -68,6 +68,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
     }
 
     event Staked(uint _amount, uint _totalSupply);
+    event ReStaked(uint _amount);
     event Unstaked(uint _amount);
     event Claimed(uint _claimed);
     event StakingAllowed(bool _allow);
@@ -126,6 +127,7 @@ contract SixMonthsStakingContract is Ownable, ReentrancyGuard {
         require(toClaim >= MINIMUM_AMOUNT, "Insuficient amount");
         _stake(toClaim, msg.sender);
         _updateLastClaim();
+        emit ReStaked(toClaim);
     }
 
     function claim() external nonReentrant {
