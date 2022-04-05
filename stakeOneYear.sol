@@ -46,6 +46,13 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
         uint lastClaim;
     }
 
+    struct Status {
+        bool stakingAllowed;
+        uint currentApr;
+        uint stakesCount;
+        uint totalSupply;
+    }
+
     Struct[] public aprHistory;
 
     mapping(address => bool) private stakerAddressList;
@@ -158,6 +165,10 @@ contract OneYearStakingContract is Ownable, ReentrancyGuard {
 
     function getUserStakesIds(address _user) external view returns (uint[] memory) {
         return userStakeIds[_user];
+    }
+
+    function getStatus() external view returns (Status memory) {
+        return Status(stakingAllowed,aprHistory[aprHistory.length - 1].apr,stakesCount,totalSupply);
     }
 
     function getUserStakes() external view returns (Stake[] memory) {
