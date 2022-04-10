@@ -1,6 +1,6 @@
 // contracts/TokenVesting.sol
 // SPDX-License-Identifier: Apache-2.0
-pragma solidity 0.8.11;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -54,7 +54,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @dev Reverts if no vesting schedule matches the passed identifier.
     */
     modifier onlyIfVestingScheduleExists(bytes32 vestingScheduleId) {
-        require(vestingSchedules[vestingScheduleId].initialized == true);
+        require(vestingSchedules[vestingScheduleId].initialized);
         _;
     }
 
@@ -62,8 +62,8 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @dev Reverts if the vesting schedule does not exist or has been revoked.
     */
     modifier onlyIfVestingScheduleNotRevoked(bytes32 vestingScheduleId) {
-        require(vestingSchedules[vestingScheduleId].initialized == true);
-        require(vestingSchedules[vestingScheduleId].revoked == false);
+        require(vestingSchedules[vestingScheduleId].initialized);
+        require(!vestingSchedules[vestingScheduleId].revoked);
         _;
     }
 
@@ -147,11 +147,11 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     }
 
     function delVesterAddress(address _addr) external onlyOwner {
-        vesterAddressList[_addr] = false;
+        delete vesterAddressList[_addr];
     }
 
     function createMultipleVestingSchedule(
-        address[] calldata _addresses,
+        address[] calldata _beneficiaries,
         uint256 _start,
         uint256 _cliff,
         uint256 _duration,
@@ -160,8 +160,8 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     )
         public
         onlyVesters {
-            for (uint i; i < _addresses.length; i++) {
-                createVestingSchedule(_addresses[i],_start,_cliff,_duration,_slicePeriodSeconds,false,_amounts[i]);
+            for (uint i; i < _beneficiaries.length; i++) {
+                createVestingSchedule(_beneficiaries[i],_start,_cliff,_duration,_slicePeriodSeconds,false,_amounts[i]);
             }
         }
     /**
