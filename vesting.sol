@@ -51,8 +51,6 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         _;
     }
 
-
-
     /**
     * @dev Reverts if the caller is not on vester list.
     */
@@ -226,11 +224,11 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     */
     function releaseAllforHolder(address holder) public nonReentrant {
         bytes32[] memory vestingIds = getVestingScheduleIdsForHolder(holder);
-        
+        uint amountReleased;
         for (uint index; index < vestingIds.length; index++) {
-            _release(vestingIds[index]);
-
+            amountReleased += _release(vestingIds[index]);
         }
+        emit Released(amountReleased);
     }
 
     /**
@@ -239,7 +237,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @param vestingScheduleId the vesting schedule identifier
     */
     function release(bytes32 vestingScheduleId) public nonReentrant {
-        _release(vestingScheduleId);
+        emit Released(_release(vestingScheduleId));
     }
 
     /**
@@ -248,10 +246,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @notice Release vested amount of tokens.
     * @param vestingScheduleId the vesting schedule identifier
     */
-    function _release(
-        bytes32 vestingScheduleId
-    )
-        internal {
+    function _release(bytes32 vestingScheduleId) internal returns (uint) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
         // bool isOwner = msg.sender == owner();
@@ -261,10 +256,12 @@ contract TokenVesting is Ownable, ReentrancyGuard{
             "TokenVesting: only beneficiary and vesters can release vested tokens"
         );
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+        if (vestedAmount == 0) {return 0;}
         vestingSchedule.released = vestingSchedule.released.add(vestedAmount);
         address payable beneficiaryPayable = payable(vestingSchedule.beneficiary);
         vestingSchedulesTotalAmount = vestingSchedulesTotalAmount.sub(vestedAmount);
         _token.safeTransfer(beneficiaryPayable, vestedAmount);
+        return vestedAmount;
     }
 
     /**
