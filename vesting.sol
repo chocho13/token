@@ -67,6 +67,9 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         _;
     }
 
+    /**
+    * @dev Reverts if the caller is not on vester list.
+    */
     modifier onlyVesters() {
         require(vesterAddressList[msg.sender] == true,"Not authorized");
         _;
@@ -91,7 +94,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @return the number of vesting schedules
     */
     function getVestingSchedulesCountByBeneficiary(address _beneficiary)
-    external
+    public
     view
     returns(uint256){
         return holdersVestingCount[_beneficiary];
@@ -120,7 +123,6 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         return getVestingSchedule(computeVestingScheduleIdForAddressAndIndex(holder, index));
     }
 
-
     /**
     * @notice Returns the total amount of vesting schedules.
     * @return the total amount of vesting schedules
@@ -142,14 +144,26 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         return address(_token);
     }
 
+    /**
+    * FRED : added
+    * @dev add address to authorized vesters.
+    */
     function addVesterAddress(address _addr) external onlyOwner {
         vesterAddressList[_addr] = true;
     }
 
+    /**
+    * FRED : added
+    * @dev delete address from authorized vesters.
+    */
     function delVesterAddress(address _addr) external onlyOwner {
         delete vesterAddressList[_addr];
     }
 
+    /**
+    * FRED : added
+    * @dev create multiple vesting.
+    */
     function createMultipleVestingSchedule(
         address[] calldata _beneficiaries,
         uint256 _start,
@@ -164,7 +178,9 @@ contract TokenVesting is Ownable, ReentrancyGuard{
                 createVestingSchedule(_beneficiaries[i],_start,_cliff,_duration,_slicePeriodSeconds,false,_amounts[i]);
             }
         }
+
     /**
+    * FRED : changed modifier from onlyOwner to onlyVesters
     * @notice Creates a new vesting schedule for a beneficiary.
     * @param _beneficiary address of the beneficiary to whom vested tokens are transferred
     * @param _start start time of the vesting period
@@ -244,16 +260,40 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     }
 
     /**
+    * FRED : added
+    * @notice Release vested amount of tokens for gived holder.
+    * @param holder is holder address
+    */
+    function releaseAllforHolder(address holder) public nonReentrant {
+        bytes32[] memory vestingIds = getVestingScheduleIdsForHolder(holder);
+        
+        for (uint index; index < vestingIds.length; index++) {
+            _release(vestingIds[index],computeReleasableAmount(vestingIds[index]));
+
+        }
+    }
+
+    /**
+    * FRED : added
     * @notice Release vested amount of tokens.
     * @param vestingScheduleId the vesting schedule identifier
     * @param amount the amount to release
     */
-    function release(
+    function release(bytes32 vestingScheduleId, uint256 amount) public nonReentrant {
+        _release(vestingScheduleId, amount);
+    }
+
+    /**
+    * FRED : renamed from release to _release and changed from public to internal to manage the nonReentrant at upperlevel
+    * @notice Release vested amount of tokens.
+    * @param vestingScheduleId the vesting schedule identifier
+    * @param amount the amount to release
+    */
+    function _release(
         bytes32 vestingScheduleId,
         uint256 amount
     )
-        public
-        nonReentrant
+        internal
         onlyIfVestingScheduleNotRevoked(vestingScheduleId){
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
@@ -292,6 +332,22 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         returns(uint256){
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         return _computeReleasableAmount(vestingSchedule);
+    }
+
+    /**
+    * FRED : added
+    * @notice Computes the vested amount of tokens for the given holder address.
+    * @return the vested amount
+    */
+    function computeReleasableAmountByHolder(address holder)
+        public
+        view
+        returns(uint256){
+            uint amount = 0;
+            for (uint index; index < getVestingSchedulesCountByBeneficiary(holder); index++) {
+                amount += computeReleasableAmount(computeVestingScheduleIdForAddressAndIndex(holder,index));
+            }
+        return amount;
     }
 
     /**
@@ -334,6 +390,22 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         view
         returns(VestingSchedule memory){
         return vestingSchedules[computeVestingScheduleIdForAddressAndIndex(holder, holdersVestingCount[holder] - 1)];
+    }
+
+    /**
+    * FRED - added
+    * @dev Returns vesting Ids for a given holder address.
+    *
+    */
+    function getVestingScheduleIdsForHolder(address holder)
+        public
+        view
+        returns(bytes32[] memory ids){
+            bytes32[] memory scheduleIds;
+            for (uint index; index < getVestingSchedulesCountByBeneficiary(holder); index++) {
+                scheduleIds[index] = computeVestingScheduleIdForAddressAndIndex(holder,index);
+            }
+        return scheduleIds;
     }
 
     /**
