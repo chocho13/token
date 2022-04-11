@@ -170,12 +170,13 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         uint256 _cliff,
         uint256 _duration,
         uint256 _slicePeriodSeconds,
+        bool _revocable,
         uint256[] calldata _amounts
     )
         public
         onlyVesters {
             for (uint i; i < _beneficiaries.length; i++) {
-                createVestingSchedule(_beneficiaries[i],_start,_cliff,_duration,_slicePeriodSeconds,false,_amounts[i]);
+                createVestingSchedule(_beneficiaries[i],_start,_cliff,_duration,_slicePeriodSeconds,_revocable,_amounts[i]);
             }
         }
 
@@ -229,12 +230,13 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     }
 
     /**
+    * FRED : changed modifier from onlyOwner to onlyVesters
     * @notice Revokes the vesting schedule for given identifier.
     * @param vestingScheduleId the vesting schedule identifier
     */
     function revoke(bytes32 vestingScheduleId)
         public
-        onlyOwner
+        onlyVesters
         onlyIfVestingScheduleNotRevoked(vestingScheduleId){
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         require(vestingSchedule.revocable == true, "TokenVesting: vesting is not revocable");
@@ -285,6 +287,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
 
     /**
     * FRED : renamed from release to _release and changed from public to internal to manage the nonReentrant at upperlevel
+    * FRED : modified isOwner to isVester
     * @notice Release vested amount of tokens.
     * @param vestingScheduleId the vesting schedule identifier
     * @param amount the amount to release
@@ -297,10 +300,11 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         onlyIfVestingScheduleNotRevoked(vestingScheduleId){
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
         bool isBeneficiary = msg.sender == vestingSchedule.beneficiary;
-        bool isOwner = msg.sender == owner();
+        // bool isOwner = msg.sender == owner();
+        bool isVester = vesterAddressList[msg.sender];
         require(
-            isBeneficiary || isOwner,
-            "TokenVesting: only beneficiary and owner can release vested tokens"
+            isBeneficiary || isVester,
+            "TokenVesting: only beneficiary and vesters can release vested tokens"
         );
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
         require(vestedAmount >= amount, "TokenVesting: cannot release tokens, not enough vested tokens");
