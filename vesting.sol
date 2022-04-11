@@ -179,7 +179,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
         );
         require(_duration > 0, "TokenVesting: duration must be > 0");
         require(_amount > 0, "TokenVesting: amount must be > 0");
-        bytes32 vestingScheduleId = this.computeNextVestingScheduleIdForHolder(_beneficiary);
+        bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(_beneficiary);
         vestingSchedules[vestingScheduleId] = VestingSchedule(
             true,
             _beneficiary,
@@ -208,7 +208,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @notice Release vested amount of tokens for gived holder.
     * @param holder is holder address
     */
-    function releaseAllforHolder(address holder) public nonReentrant {
+    function releaseByHolder(address holder) public nonReentrant {
         bytes32[] memory vestingIds = getVestingScheduleIdsForHolder(holder);
         uint amountReleased;
         for (uint index; index < vestingIds.length; index++) {
@@ -309,7 +309,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @dev Computes the next vesting schedule identifier for a given holder address.
     */
     function computeNextVestingScheduleIdForHolder(address holder)
-        public
+        internal
         view
         returns(bytes32){
         return computeVestingScheduleIdForAddressAndIndex(holder, holdersVestingCount[holder]);
