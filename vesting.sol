@@ -117,7 +117,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     /**
     * @dev Returns the address of the ERC20 token managed by the vesting contract.
     */
-    function getToken()
+    function getVestingToken()
     external
     view
     returns(address){
@@ -208,7 +208,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @notice Release vested amount of tokens for gived holder.
     * @param holder is holder address
     */
-    function releaseByHolder(address holder) public nonReentrant {
+    function releaseForHolder(address holder) public nonReentrant {
         bytes32[] memory vestingIds = getVestingScheduleIdsForHolder(holder);
         uint amountReleased;
         for (uint index; index < vestingIds.length; index++) {
@@ -276,7 +276,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @return the vested amount
     */
     function computeReleasableAmountByHolder(address holder) public view  returns(uint256){
-        uint amount = 0;
+        uint amount;
         for (uint index; index < getVestingSchedulesCountByBeneficiary(holder); index++) {
             amount += computeReleasableAmount(computeVestingScheduleIdForAddressAndIndex(holder,index));
         }
@@ -357,7 +357,7 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     internal
     view
     returns(uint256){
-        uint256 currentTime = getCurrentTime();
+        uint256 currentTime = block.timestamp;
         if (currentTime >= vestingSchedule.start.add(vestingSchedule.duration)) {
             return vestingSchedule.amountTotal.sub(vestingSchedule.released);
         } else {
@@ -365,14 +365,6 @@ contract TokenVesting is Ownable, ReentrancyGuard{
             uint256 vestedAmount = vestingSchedule.amountTotal.mul(timeFromStart).div(vestingSchedule.duration);
             return vestedAmount.sub(vestingSchedule.released);
         }
-    }
-
-    function getCurrentTime()
-        internal
-        virtual
-        view
-        returns(uint256){
-        return block.timestamp;
     }
 
 }
