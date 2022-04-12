@@ -275,12 +275,25 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     * @notice Computes the vested amount of tokens for the given holder address.
     * @return the vested amount
     */
-    function computeReleasableAmountByHolder(address holder) public view  returns(uint256){
+    function computeReleasableAmountByHolder(address holder) public view returns(uint256){
         uint amount;
         for (uint index; index < getVestingSchedulesCountByBeneficiary(holder); index++) {
-            amount += computeReleasableAmount(computeVestingScheduleIdForAddressAndIndex(holder,index));
+            amount += computeReleasableAmount(computeVestingScheduleIdForAddressAndIndex(holder,index));            
         }
         return amount;
+    }
+
+    /**
+    * FRED : added
+    * @return vestings for a user
+    */
+    function getVestingsByHolder(address holder) public view returns(VestingSchedule[] memory){
+        uint vestingCount = getVestingSchedulesCountByBeneficiary(holder);
+        VestingSchedule[] memory vestings = new VestingSchedule[](vestingCount);
+        for (uint index; index < vestingCount; index++) {
+            vestings[index] = vestingSchedules[computeVestingScheduleIdForAddressAndIndex(holder,index)];
+        }
+        return vestings;
     }
 
     /**
