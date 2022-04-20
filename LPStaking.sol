@@ -1,128 +1,91 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.12;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract LPStakingContract is Ownable, ReentrancyGuard {
+contract farmingContract is Ownable, ReentrancyGuard {
 
-    struct Stake {
-        address user;
-        uint amount;
-        uint unclaimed;
-    }
-
-    Stake[] public stakes;
-    mapping(address => uint[]) private ownerStakeIds;
+    mapping(address => uint) public farmingAmount;
+    mapping(address => uint) public farmingLastUpdate;
+    mapping(address => uint) public farmingUnclaimedRewards;
 
     uint public totalSupply;
-    bool public stakingAllowed;
-    uint public lastUpdate;
-    uint public rewardPerBlock;
+    bool public farmingAllowed;
 
-    uint public constant MINIMUM_AMOUNT = 500 * 1e18;
+    uint public constant MIN_AMOUNT = 1 * 1e18;
+    uint public constant SECONDS_IN_YEAR = 31536000;
+    uint public immutable APR;
+
 
     address public constant REWARD_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
-    address public constant STAKING_TOKEN_ADDRESS = 0x469E0D351B868cb397967E57a00dc7DE082542A3; // LP token address
-    IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
+    address public constant FARMING_TOKEN_ADDRESS = 0x469E0D351B868cb397967E57a00dc7DE082542A3; // LP token address
+    IERC20 private constant FARMING_TOKEN = IERC20(FARMING_TOKEN_ADDRESS);
     IERC20 private constant REWARD_TOKEN = IERC20(REWARD_TOKEN_ADDRESS);
-    
-    constructor() {
-        lastUpdate = block.timestamp;
-        totalSupply = 0;
-        stakingAllowed = true;
-        rewardPerBlock = 0.6808 * 1e18;
+
+    constructor(uint _APR) {
+        APR = _APR;
+        farmingAllowed = true; // TODO => false
     }
 
-    event Stacked(uint _amount,uint _totalSupply);
-    event Unstaked(uint _amount);
+    event Farmed(uint _totalSupply);
+    event Unfarmed(uint _amount);
     event Claimed(uint _claimed);
-    event StakingAllowed(bool _allow);
-    event Updated(uint _lastupdate);
-    event AdjustRewardPerBlock(uint _rewardPerBlock);
+    event FarmingAllowed(bool _allow);
 
-    function allowStaking(bool _allow) external onlyOwner returns (bool allowed) {
-        emit StakingAllowed(_allow);
-        return stakingAllowed = _allow;
+    function allowFarming(bool _allow) external onlyOwner {
+        farmingAllowed = _allow;
+        emit FarmingAllowed(_allow);
     }
 
-    function adjustRewardPerBlock(uint _rewardPerBlock) external onlyOwner returns (uint newRewardPerBlock) {
-        emit AdjustRewardPerBlock(_rewardPerBlock);
-        return rewardPerBlock = _rewardPerBlock;
-    }
-
-    function forceUpdatePool() external updatePool nonReentrant returns (bool updated) {
-        return true;
-    }
-
-    function stake(uint _amount) external updatePool nonReentrant returns (bool staked) {
-        require(stakingAllowed, "Staking is not enabled");
-        require(_amount >= MINIMUM_AMOUNT, "Insuficient amount");
-        require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
-        require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
-        stakes.push(Stake(msg.sender, _amount, 0));
-        ownerStakeIds[msg.sender].push(stakes.length-1);
+    function farm(uint _amount) external nonReentrant {
+        require(farmingAllowed, "Farming is not enabled");
+        require(_amount > MIN_AMOUNT, "Insuficient amount");
+        require(_amount <= FARMING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
+        require(FARMING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
+        if (farmingAmount[msg.sender] > 0) {
+            farmingUnclaimedRewards[msg.sender] = _claimableRewardsSinceLastUpdate(msg.sender);
+        }
+        farmingAmount[msg.sender] += _amount;
+        farmingLastUpdate[msg.sender] = block.timestamp;
         totalSupply += _amount;
-        emit Stacked(_amount,totalSupply);
-        return true;
+        emit Farmed(totalSupply);
     }
 
-    function claim() external updatePool nonReentrant returns(uint amount) {
-        uint claimed = 0;
-        uint j;
-        for(uint i = 0; i < ownerStakeIds[msg.sender].length; i++) {
-            j = ownerStakeIds[msg.sender][i];
-            if (stakes[j].unclaimed > 0) {
-                require(REWARD_TOKEN.balanceOf(address(this)) > stakes[j].unclaimed, "Insuficient contract balance");
-                require(REWARD_TOKEN.transfer(msg.sender,stakes[j].unclaimed), "Transfer failed");
-            }
-            claimed += stakes[j].unclaimed;
-            stakes[j].unclaimed = 0;
+    function _claimableRewardsSinceLastUpdate(address _address) internal view returns (uint) {
+        return (farmingAmount[_address] * (block.timestamp - farmingLastUpdate[_address]) * APR / 100 / SECONDS_IN_YEAR);
+    }
+
+    function getClaimableRewards() public view returns (uint) {
+        return (farmingUnclaimedRewards[msg.sender] + _claimableRewardsSinceLastUpdate(msg.sender));
+    }
+
+    function claim() public nonReentrant {
+        uint toClaim = getClaimableRewards();
+        require(toClaim > 0, "Nothing to claim");
+        _claim(toClaim);
+    }
+
+    function _claim(uint _toClaim) internal {
+        require(REWARD_TOKEN.balanceOf(address(this)) > _toClaim, "Insuficient contract balance");
+        require(REWARD_TOKEN.transfer(msg.sender,_toClaim), "Transfer failed");
+        farmingLastUpdate[msg.sender] = block.timestamp;
+        farmingUnclaimedRewards[msg.sender] = 0;
+        emit Claimed(_toClaim);
+    }
+
+    function unfarm() external nonReentrant {
+        uint toUnfarm = farmingAmount[msg.sender];
+        require(toUnfarm > 0, "Nothing to unfarm"); 
+        uint toClaim = getClaimableRewards();
+        if (toClaim > 0) {
+            _claim(toClaim);
         }
-        emit Claimed(claimed);
-        return claimed;
+        require(FARMING_TOKEN.balanceOf(address(this)) > toUnfarm, "Insuficient contract balance");
+        require(FARMING_TOKEN.transfer(msg.sender, toUnfarm), "Transfer failed");
+        totalSupply -= toUnfarm; 
+        emit Unfarmed(toUnfarm);
     }
 
-    function unstake() external updatePool nonReentrant returns(uint totalReceived) {
-        uint stakeId;
-        uint stakedAmount = 0;
-        uint unclaimedAmount = 0;
-        for(uint i = 0; i < ownerStakeIds[msg.sender].length; i++) {
-            stakeId = ownerStakeIds[msg.sender][i];
-            stakedAmount += stakes[stakeId].amount;
-            unclaimedAmount += stakes[stakeId].unclaimed;
-            require(STAKING_TOKEN.balanceOf(address(this)) > stakes[stakeId].amount, "Insuficient staking contract balance");
-            require(REWARD_TOKEN.balanceOf(address(this)) > stakes[stakeId].unclaimed, "Insuficient reward contract balance");
-            require(STAKING_TOKEN.transfer(msg.sender,stakes[stakeId].amount), "Staking transfer failed");
-            require(REWARD_TOKEN.transfer(msg.sender,stakes[stakeId].unclaimed), "Reward transfer failed");
-            totalSupply -= stakes[stakeId].amount;
-            stakes[stakeId] = stakes[stakes.length -1];
-            for(uint k = 0; k < ownerStakeIds[stakes[stakeId].user].length; k++) {
-                if (ownerStakeIds[stakes[stakeId].user][k] == stakes.length -1) {
-                    ownerStakeIds[stakes[stakeId].user][k] = stakeId;
-                }
-            }
-            stakes.pop();
-            ownerStakeIds[msg.sender][i] = ownerStakeIds[msg.sender][ownerStakeIds[msg.sender].length -1];
-            ownerStakeIds[msg.sender].pop();
-        }
-        require(stakedAmount > 0, "Nothing to unstake");
-        emit Unstaked(stakedAmount);
-        emit Claimed(unclaimedAmount);
-        return stakedAmount + unclaimedAmount;
-    }
-
-    function getUserStakesIds(address _user) external view returns (uint[] memory) {
-        return ownerStakeIds[_user];
-    }
-
-    modifier updatePool() {
-        for(uint i = 0; i < stakes.length; i++) {
-            stakes[i].unclaimed += stakes[i].amount * (block.timestamp - lastUpdate) * rewardPerBlock / totalSupply;
-        }
-        lastUpdate = block.timestamp;
-        emit Updated(lastUpdate);
-        _;
-    }
 }
