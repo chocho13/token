@@ -23,7 +23,6 @@ contract farmingContract is Ownable, ReentrancyGuard {
     uint public constant WITHDRAW_FEE_PERIOD = 1 weeks;
     uint public constant withdrawFee = 5; // 5%
     uint public constant performanceFee = 5; // 5%
-    uint public constant MIN_LOCK_DURATION = 1 weeks; // 1 week
 
     address public constant REWARD_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     address public constant FARMING_TOKEN_ADDRESS = 0x469E0D351B868cb397967E57a00dc7DE082542A3; // LP token address
