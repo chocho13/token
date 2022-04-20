@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 contract farmingContract is Ownable, ReentrancyGuard {
 
     mapping(address => uint) public farmingAmount;
+    mapping(address => uint) public farmingLastDepositedDate;
     mapping(address => uint) public farmingLastUpdate;
     mapping(address => uint) public farmingUnclaimedRewards;
 
@@ -15,9 +16,14 @@ contract farmingContract is Ownable, ReentrancyGuard {
     bool public farmingAllowed;
 
     uint public constant MIN_AMOUNT = 1 * 1e18;
-    uint public constant SECONDS_IN_YEAR = 31536000;
+    uint public constant SECONDS_IN_YEAR = 365 days;
     uint public immutable APR;
 
+    uint public constant PERFORMANCE_FEE_PERIOD = 72 hours;
+    uint public constant WITHDRAW_FEE_PERIOD = 1 weeks;
+    uint public constant withdrawFee = 5; // 5%
+    uint public constant performanceFee = 5; // 5%
+    uint public constant MIN_LOCK_DURATION = 1 weeks; // 1 week
 
     address public constant REWARD_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     address public constant FARMING_TOKEN_ADDRESS = 0x469E0D351B868cb397967E57a00dc7DE082542A3; // LP token address
@@ -29,9 +35,9 @@ contract farmingContract is Ownable, ReentrancyGuard {
         farmingAllowed = true; // TODO => false
     }
 
-    event Farmed(uint _totalSupply);
-    event Unfarmed(uint _amount);
-    event Claimed(uint _claimed);
+    event Deposit(uint _totalSupply);
+    event Withdraw(uint _amount);
+    event Harvest(uint _harvested);
     event FarmingAllowed(bool _allow);
 
     function allowFarming(bool _allow) external onlyOwner {
@@ -39,53 +45,80 @@ contract farmingContract is Ownable, ReentrancyGuard {
         emit FarmingAllowed(_allow);
     }
 
-    function farm(uint _amount) external nonReentrant {
+    function deposit(uint _amount) external nonReentrant {
         require(farmingAllowed, "Farming is not enabled");
         require(_amount > MIN_AMOUNT, "Insuficient amount");
         require(_amount <= FARMING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(FARMING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
         if (farmingAmount[msg.sender] > 0) {
-            farmingUnclaimedRewards[msg.sender] += _claimableRewardsSinceLastUpdate();
+            farmingUnclaimedRewards[msg.sender] += _harvestableRewardsSinceLastUpdate();
         }
         farmingAmount[msg.sender] += _amount;
+        farmingLastDepositedDate[msg.sender] = block.timestamp;
         farmingLastUpdate[msg.sender] = block.timestamp;
         totalSupply += _amount;
-        emit Farmed(totalSupply);
+        emit Deposit(totalSupply);
     }
 
-    function _claimableRewardsSinceLastUpdate() internal view returns (uint) {
+    function _harvestableRewardsSinceLastUpdate() internal view returns (uint) {
         return (farmingAmount[msg.sender] * (block.timestamp - farmingLastUpdate[msg.sender]) * APR / 100 / SECONDS_IN_YEAR);
     }
 
-    function getClaimableRewards() public view returns (uint) {
-        return (farmingUnclaimedRewards[msg.sender] + _claimableRewardsSinceLastUpdate());
+    function getHarvestableRewards() public view returns (uint) {
+        if (farmingAmount[msg.sender] == 0) {return 0;}
+        uint currentRewards = _harvestableRewardsSinceLastUpdate() + farmingUnclaimedRewards[msg.sender];
+        return block.timestamp - farmingLastUpdate[msg.sender] < PERFORMANCE_FEE_PERIOD ? currentRewards - currentRewards * performanceFee / 100 : currentRewards;
     }
 
-    function claim() public nonReentrant {
-        uint toClaim = getClaimableRewards();
-        require(toClaim > 0, "Nothing to claim");
-        _claim(toClaim);
+    function getPerformanceFeeEndDate() external view returns (uint) {
+        return farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD;
     }
 
-    function _claim(uint _toClaim) internal {
-        require(REWARD_TOKEN.balanceOf(address(this)) > _toClaim, "Insuficient contract balance");
-        require(REWARD_TOKEN.transfer(msg.sender,_toClaim), "Transfer failed");
+    function getWithdrawFeeEndDate() external view returns (uint) {
+        return farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD;
+    }
+
+    function getWithdrawableAmount() public view returns (uint) {
+        return block.timestamp - farmingLastDepositedDate[msg.sender] < WITHDRAW_FEE_PERIOD ? farmingAmount[msg.sender] - farmingAmount[msg.sender] * withdrawFee / 100 : farmingAmount[msg.sender];
+    }
+
+    function getDepositedAmount() public view returns (uint) {
+        return farmingAmount[msg.sender];
+    }
+
+    function getLastDepositedDate() public view returns (uint) {
+        return farmingLastDepositedDate[msg.sender];
+    }
+
+    function getLastUpdateRewardsDate() public view returns (uint) {
+        return farmingLastUpdate[msg.sender];
+    }
+
+    function harvest() public nonReentrant {
+        uint toHarvest = getHarvestableRewards();
+        require(toHarvest > 0, "Nothing to claim");
+        _harvest(toHarvest);
+    }
+
+    function _harvest(uint _toHarvest) internal {
+        require(REWARD_TOKEN.balanceOf(address(this)) > _toHarvest, "Insuficient contract balance");
+        require(REWARD_TOKEN.transfer(msg.sender,_toHarvest), "Transfer failed");
         farmingLastUpdate[msg.sender] = block.timestamp;
         farmingUnclaimedRewards[msg.sender] = 0;
-        emit Claimed(_toClaim);
+        emit Harvest(_toHarvest);
     }
-
-    function unfarm() external nonReentrant {
-        uint toUnfarm = farmingAmount[msg.sender];
-        require(toUnfarm > 0, "Nothing to unfarm"); 
-        uint toClaim = getClaimableRewards();
-        if (toClaim > 0) {
-            _claim(toClaim);
+    
+    function withdraw() external nonReentrant {
+        require(farmingAmount[msg.sender] > 0, "Nothing to withdraw"); 
+        uint toWithdraw = getWithdrawableAmount();
+        uint toHarvest = getHarvestableRewards();
+        if (toHarvest > 0) {
+            _harvest(toHarvest);
         }
-        require(FARMING_TOKEN.balanceOf(address(this)) > toUnfarm, "Insuficient contract balance");
-        require(FARMING_TOKEN.transfer(msg.sender, toUnfarm), "Transfer failed");
-        totalSupply -= toUnfarm; 
-        emit Unfarmed(toUnfarm);
+        require(FARMING_TOKEN.balanceOf(address(this)) > toWithdraw, "Insuficient contract balance");
+        require(FARMING_TOKEN.transfer(msg.sender, toWithdraw), "Transfer failed");
+        totalSupply -= toWithdraw; 
+        emit Withdraw(toWithdraw);
     }
 
 }
