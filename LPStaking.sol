@@ -7,10 +7,20 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract farmingContract is Ownable, ReentrancyGuard {
 
-    mapping(address => uint) public farmingAmount;
-    mapping(address => uint) public farmingLastDepositedDate;
-    mapping(address => uint) public farmingLastUpdate;
-    mapping(address => uint) public farmingUnclaimedRewards;
+    mapping(address => uint) private farmingAmount;
+    mapping(address => uint) private farmingLastDepositedDate;
+    mapping(address => uint) private farmingLastUpdate;
+    mapping(address => uint) private farmingUnclaimedRewards;
+
+    struct infos {
+        uint depositedAmount;
+        uint withdrawableAmount;
+        uint harvestableRewards;
+        uint lastDepositedDate;
+        uint lastUpdateRewardsDate;
+        uint performanceFeeEndDate;
+        uint withdrawFeeEndDate;
+    }
 
     uint public totalSupply;
     bool public farmingAllowed;
@@ -63,38 +73,50 @@ contract farmingContract is Ownable, ReentrancyGuard {
         return (farmingAmount[msg.sender] * (block.timestamp - farmingLastUpdate[msg.sender]) * APR / 100 / SECONDS_IN_YEAR);
     }
 
-    function getHarvestableRewards() public view returns (uint) {
+    function _getHarvestableRewards() internal view returns (uint) {
         if (farmingAmount[msg.sender] == 0) {return 0;}
         uint currentRewards = _harvestableRewardsSinceLastUpdate() + farmingUnclaimedRewards[msg.sender];
         return block.timestamp - farmingLastUpdate[msg.sender] < PERFORMANCE_FEE_PERIOD ? currentRewards - currentRewards * performanceFee / 100 : currentRewards;
     }
 
-    function getPerformanceFeeEndDate() external view returns (uint) {
-        return farmingAmount[msg.sender] > 0 ? farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
-    }
+    // function _getPerformanceFeeEndDate() internal view returns (uint) {
+    //     return farmingAmount[msg.sender] > 0 ? farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
+    // }
 
-    function getWithdrawFeeEndDate() external view returns (uint) {
-        return farmingAmount[msg.sender] > 0 ? farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
-    }
+    // function _getWithdrawFeeEndDate() internal view returns (uint) {
+    //     return farmingAmount[msg.sender] > 0 ? farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
+    // }
 
-    function getWithdrawableAmount() public view returns (uint) {
+    function _getWithdrawableAmount() internal view returns (uint) {
         return block.timestamp - farmingLastDepositedDate[msg.sender] < WITHDRAW_FEE_PERIOD ? farmingAmount[msg.sender] - farmingAmount[msg.sender] * withdrawFee / 100 : farmingAmount[msg.sender];
     }
 
-    function getDepositedAmount() public view returns (uint) {
-        return farmingAmount[msg.sender];
-    }
+    // function _getDepositedAmount() internal view returns (uint) {
+    //     return farmingAmount[msg.sender];
+    // }
 
-    function getLastDepositedDate() public view returns (uint) {
-        return farmingLastDepositedDate[msg.sender];
-    }
+    // function _getLastDepositedDate() internal view returns (uint) {
+    //     return farmingLastDepositedDate[msg.sender];
+    // }
 
-    function getLastUpdateRewardsDate() public view returns (uint) {
-        return farmingLastUpdate[msg.sender];
-    }
+    // function _getLastUpdateRewardsDate() internal view returns (uint) {
+    //     return farmingLastUpdate[msg.sender];
+    // }
 
+    function getInfos() external view returns (infos memory) {
+        return (infos(
+            farmingAmount[msg.sender],
+            _getWithdrawableAmount(),
+            _getHarvestableRewards(),
+            farmingLastDepositedDate[msg.sender],
+            farmingLastUpdate[msg.sender],
+            farmingAmount[msg.sender] > 0 ? farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0,
+            farmingAmount[msg.sender] > 0 ? farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0
+            ));
+    }
+    
     function harvest() public nonReentrant {
-        uint toHarvest = getHarvestableRewards();
+        uint toHarvest = _getHarvestableRewards();
         require(toHarvest > 0, "Nothing to claim");
         _harvest(toHarvest);
     }
@@ -109,8 +131,8 @@ contract farmingContract is Ownable, ReentrancyGuard {
     
     function withdraw() external nonReentrant {
         require(farmingAmount[msg.sender] > 0, "Nothing to withdraw"); 
-        uint toWithdraw = getWithdrawableAmount();
-        uint toHarvest = getHarvestableRewards();
+        uint toWithdraw = _getWithdrawableAmount();
+        uint toHarvest = _getHarvestableRewards();
         if (toHarvest > 0) {
             _harvest(toHarvest);
         }
