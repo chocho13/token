@@ -71,11 +71,11 @@ contract farmingContract is Ownable, ReentrancyGuard {
     }
 
     function getPerformanceFeeEndDate() external view returns (uint) {
-        return farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD;
+        return farmingAmount[msg.sender] > 0 ? farmingLastUpdate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
     }
 
     function getWithdrawFeeEndDate() external view returns (uint) {
-        return farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD;
+        return farmingAmount[msg.sender] > 0 ? farmingLastDepositedDate[msg.sender] + PERFORMANCE_FEE_PERIOD : 0;
     }
 
     function getWithdrawableAmount() public view returns (uint) {
