@@ -45,7 +45,7 @@ contract farmingContract is Ownable, ReentrancyGuard {
         require(_amount <= FARMING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(FARMING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
         if (farmingAmount[msg.sender] > 0) {
-            farmingUnclaimedRewards[msg.sender] = _claimableRewardsSinceLastUpdate(msg.sender);
+            farmingUnclaimedRewards[msg.sender] += _claimableRewardsSinceLastUpdate();
         }
         farmingAmount[msg.sender] += _amount;
         farmingLastUpdate[msg.sender] = block.timestamp;
@@ -53,12 +53,12 @@ contract farmingContract is Ownable, ReentrancyGuard {
         emit Farmed(totalSupply);
     }
 
-    function _claimableRewardsSinceLastUpdate(address _address) internal view returns (uint) {
-        return (farmingAmount[_address] * (block.timestamp - farmingLastUpdate[_address]) * APR / 100 / SECONDS_IN_YEAR);
+    function _claimableRewardsSinceLastUpdate() internal view returns (uint) {
+        return (farmingAmount[msg.sender] * (block.timestamp - farmingLastUpdate[msg.sender]) * APR / 100 / SECONDS_IN_YEAR);
     }
 
     function getClaimableRewards() public view returns (uint) {
-        return (farmingUnclaimedRewards[msg.sender] + _claimableRewardsSinceLastUpdate(msg.sender));
+        return (farmingUnclaimedRewards[msg.sender] + _claimableRewardsSinceLastUpdate());
     }
 
     function claim() public nonReentrant {
