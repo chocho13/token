@@ -146,14 +146,14 @@ contract TokenVesting is Ownable, ReentrancyGuard{
     */
     function createMultipleVestingSchedule(
         address[] calldata _beneficiaries,
-        uint256 _start,
-        uint256 _duration,
+        uint256[] calldata _start,
+        uint256[] calldata _duration,
         uint256[] calldata _amounts
     )
         public
         onlyVesters {
             for (uint i; i < _beneficiaries.length; i++) {
-                createVestingSchedule(_beneficiaries[i],_start,_duration,_amounts[i]);
+                createVestingSchedule(_beneficiaries[i],_start[i],_duration[i],_amounts[i]);
             }
         }
 
