@@ -5,6 +5,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+/**
+ * @author  Fred DA ROS
+ * @title   ThreeYearsStakingContractFixedAPR
+ * @notice  Lock tokens for 3 years generating claimable rewards depending configured APR 
+ */
 contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
 
     address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
@@ -56,18 +61,30 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
     event UpdatedStaker(address _staker, bool _allowed);
     event LastClaim(address _staker, uint _lastClaim);
 
+    /**
+     * @dev  function check if requirements to stake are ok
+     * @param   _amount  amount to stake
+     */
     function stakeRequirements(uint _amount) internal view {
         require(stakingAllowed, "Staking is not enabled");
         require(_amount >= MINIMUM_AMOUNT, "Insuficient stake amount");
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(userStakeIds[msg.sender].length < 100, "User stakings limit exceeded");
     }
-
+    
+    /**
+     * @dev     enable or disable staking
+     * @param   _allow  true to enable, false to disable
+     */
     function allowStaking(bool _allow) external onlyOwner {
         stakingAllowed = _allow;
         emit StakingAllowed(_allow);
     }
 
+    /**
+     * @dev     external function to stake stake
+     * @param   _amount  amount to stake
+     */
     function stake(uint _amount) external {
         stakeRequirements(_amount);
         require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
@@ -75,6 +92,9 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         _stake(_amount);
     }
 
+    /**
+     * @dev     recompound unclaimed rewards, it create a new stake
+     */
     function recompound() external {
         uint _amount = getClaimableRewards(msg.sender);
         stakeRequirements(_amount);
@@ -84,6 +104,9 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         emit ReStaked(_amount);
     }
 
+    /**
+     * @dev     claim claimable rewards
+     */
     function claim() external nonReentrant {
         uint toClaim = getClaimableRewards(msg.sender);
         require(toClaim > 0, "Nothing to claim");
@@ -93,6 +116,10 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         emit Claimed(toClaim);
     }
 
+    /**
+     * @dev     withdraw available tokens (balance minus totalStaked) from the contract
+     * @param   amount  amount to withdraw
+     */
     function withdraw(uint amount) external onlyOwner nonReentrant {
         require(amount > 0, "Nothing to withdraw");
         require(STAKING_TOKEN.balanceOf(address(this)) > amount + totalStaked, "Insuficient contract balance");
@@ -100,10 +127,16 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         emit Withdrawed(amount);
     }
 
+    /**
+     * @dev     get withdrawable amount (balance minus totalStaked)
+     */
     function getWithdrawableAmount() external view returns(uint) {
         return STAKING_TOKEN.balanceOf(address(this)) - totalStaked;
     }
 
+    /**
+     * @dev     unstake unlocked stakings
+     */
     function unstake() external nonReentrant returns(uint) {
         uint toUnstake = 0;
         uint i = 0;
@@ -130,10 +163,19 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         return toUnstake + toClaim;
     }
 
+    /**
+     * @dev     get a list of stake ids of a user
+     * @param   _user  address of the user
+     * @return  uint[]  list of stake ids
+     */
     function getUserStakesIds(address _user) external view returns (uint[] memory) {
         return userStakeIds[_user];
     }
 
+    /**
+     * @dev     return stakes details of the message sender call
+     * @return  Stake[]  list of stakes details
+     */
     function getUserStakes() external view returns (Stake[] memory) {
         Stake[] memory stakes = new Stake[](userStakeIds[msg.sender].length);
         uint stakeId;
@@ -144,10 +186,19 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         return stakes;
     }
 
+    /**
+     * @dev     get contract details
+     * @return  Status  contract status details
+     */
     function getStatus() external view returns (Status memory) {
         return Status(stakingAllowed,stakesCount,totalSupply);
     }
 
+    /**
+     * @dev     get claimable rewards
+     * @param   _user  address of the user
+     * @return  uint  amount claimable
+     */
     function getClaimableRewards(address _user) public view returns (uint) {
         uint reward = 0;
         uint stakeId;
@@ -162,6 +213,9 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         return reward;
     }
 
+    /**
+     * @dev     update last claim of a user
+     */
     function _updateLastClaim() internal {
         for (uint i = 0; i < userStakeIds[msg.sender].length; i++) {
             stakingLastClaim[userStakeIds[msg.sender][i]] = block.timestamp;
@@ -169,6 +223,10 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         emit LastClaim(msg.sender,block.timestamp);
     }
 
+    /**
+     * @dev     internal stake
+     * @param   _amount  amount to stake
+     */
     function _stake(uint _amount) internal nonReentrant {
         stakingUser[stakesCount] = msg.sender;
         stakingAmount[stakesCount] = _amount;
