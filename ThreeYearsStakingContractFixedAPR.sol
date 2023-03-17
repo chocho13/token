@@ -18,7 +18,7 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
     uint public constant MAX_SUPPLY = 500 * 1e6 * 1e18; // 500M
     uint public constant STAKING_DURATION = 1095 days; // 3 years - 1095day
     uint public constant APR = 2;
-    uint public constant MINIMUM_AMOUNT = 500 * 1e18; // 500
+    // uint public constant MINIMUM_AMOUNT = 500 * 1e18; // 500
     uint private constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
 
     uint public stakesCount;
@@ -61,7 +61,7 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
      */
     function stakeRequirements(uint _amount) internal view {
         require(stakingAllowed, "Staking is not enabled");
-        require(_amount >= MINIMUM_AMOUNT, "Insuficient stake amount");
+        // require(_amount >= MINIMUM_AMOUNT, "Insuficient stake amount");
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
         require(userStakeIds[msg.sender].length < 100, "User stakings limit exceeded");
     }
@@ -168,10 +168,24 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
 
     /**
      * @dev     return stakes details of the message sender call
+     * @return  Stake[]  list of stakes details
+     */
+    function getUserStakes() external view returns (Stake[] memory) {
+        Stake[] memory stakes = new Stake[](userStakeIds[msg.sender].length);
+        uint stakeId;
+        for(uint i; i < userStakeIds[msg.sender].length; i++) {
+            stakeId = userStakeIds[msg.sender][i];
+            stakes[i] = Stake(stakeId, stakingAmount[stakeId], stakingEndDate[stakeId], stakingLastClaim[stakeId]);
+        }
+        return stakes;
+    }
+
+    /**
+     * @dev     return stakes details of an address
      * @param   _user  address of the user
      * @return  Stake[]  list of stakes details
      */
-    function getUserStakes(address _user) external view returns (Stake[] memory) {
+    function getSpecificUserStakes(address _user) external view returns (Stake[] memory) {
         Stake[] memory stakes = new Stake[](userStakeIds[_user].length);
         uint stakeId;
         for(uint i; i < userStakeIds[_user].length; i++) {
@@ -233,5 +247,4 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         stakesCount += 1;
         emit Staked(_amount, totalSupply);
     }
-
 }
