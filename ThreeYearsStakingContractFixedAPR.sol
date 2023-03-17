@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -15,10 +15,10 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
     address public constant STAKING_TOKEN_ADDRESS = 0x1d0Ac23F03870f768ca005c84cBb6FB82aa884fD; // galeon address
     IERC20 private constant STAKING_TOKEN = IERC20(STAKING_TOKEN_ADDRESS);
 
-    uint public constant MAX_SUPPLY = 500 * 1e6 * 1e18; // 500M
-    uint public constant STAKING_DURATION = 1095 days; // 3 years - 1095day
-    uint public constant APR = 2;
-    // uint public constant MINIMUM_AMOUNT = 500 * 1e18; // 500
+    uint public constant MAX_SUPPLY = 100 * 1e6 * 1e18; // 100M
+    uint public constant STAKING_DURATION = 1095 days; // 3 years
+    uint public constant APR = 10;
+    uint public constant STAK_COUNT_LIMIT_BY_ADDRESS = 200;
     uint private constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
 
     uint public stakesCount;
@@ -61,9 +61,8 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
      */
     function stakeRequirements(uint _amount) internal view {
         require(stakingAllowed, "Staking is not enabled");
-        // require(_amount >= MINIMUM_AMOUNT, "Insuficient stake amount");
         require(totalSupply + _amount <= MAX_SUPPLY, "Pool capacity exceeded");
-        require(userStakeIds[msg.sender].length < 100, "User stakings limit exceeded");
+        require(userStakeIds[msg.sender].length < STAK_COUNT_LIMIT_BY_ADDRESS, "User stakings limit exceeded");
     }
     
     /**
@@ -84,6 +83,19 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
         require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
         _stake(_amount);
+    }
+
+    /**
+     * @dev     external function to stake stake
+     * @param   _amount  amount to stake
+     */
+    function stakeMulti(uint _amount, uint count) external {
+        stakeRequirements(_amount);
+        require(_amount <= STAKING_TOKEN.balanceOf(msg.sender), "Insuficient balance");
+        require(STAKING_TOKEN.transferFrom(msg.sender, address(this), _amount), "TransferFrom failed");
+       for (uint i; i < count; i++) {
+            _stake(_amount/count);
+       }
     }
 
     /**
@@ -247,4 +259,5 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         stakesCount += 1;
         emit Staked(_amount, totalSupply);
     }
+
 }
