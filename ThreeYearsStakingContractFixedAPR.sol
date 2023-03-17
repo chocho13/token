@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity 0.8.18;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,7 +17,7 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
 
     uint public constant MAX_SUPPLY = 500 * 1e6 * 1e18; // 500M
     uint public constant STAKING_DURATION = 1095 days; // 3 years - 1095day
-    uint public constant APR = 10; // 10%
+    uint public constant APR = 2;
     uint public constant MINIMUM_AMOUNT = 500 * 1e18; // 500
     uint private constant SECONDS_IN_YEAR = 60 * 60 * 24 * 365;
 
@@ -44,12 +44,6 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
         bool stakingAllowed;
         uint stakesCount;
         uint totalSupply;
-    }
-
-    constructor() {
-        totalSupply = 0;
-        stakingAllowed = false; // TODO false
-        stakesCount = 0;
     }
 
     event Staked(uint _amount, uint _totalSupply);
@@ -138,8 +132,8 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
      * @dev     unstake unlocked stakings
      */
     function unstake() external nonReentrant returns(uint) {
-        uint toUnstake = 0;
-        uint i = 0;
+        uint toUnstake;
+        uint i;
         uint stakeId;
         uint toClaim = getClaimableRewards(msg.sender);
         while (i < userStakeIds[msg.sender].length) {
@@ -174,13 +168,14 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
 
     /**
      * @dev     return stakes details of the message sender call
+     * @param   _user  address of the user
      * @return  Stake[]  list of stakes details
      */
-    function getUserStakes() external view returns (Stake[] memory) {
-        Stake[] memory stakes = new Stake[](userStakeIds[msg.sender].length);
+    function getUserStakes(address _user) external view returns (Stake[] memory) {
+        Stake[] memory stakes = new Stake[](userStakeIds[_user].length);
         uint stakeId;
-        for(uint i; i < userStakeIds[msg.sender].length; i++) {
-            stakeId = userStakeIds[msg.sender][i];
+        for(uint i; i < userStakeIds[_user].length; i++) {
+            stakeId = userStakeIds[_user][i];
             stakes[i] = Stake(stakeId, stakingAmount[stakeId], stakingEndDate[stakeId], stakingLastClaim[stakeId]);
         }
         return stakes;
@@ -200,11 +195,11 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
      * @return  uint  amount claimable
      */
     function getClaimableRewards(address _user) public view returns (uint) {
-        uint reward = 0;
+        uint reward;
         uint stakeId;
         uint lastClaim;
         uint until;
-        for (uint i = 0; i < userStakeIds[_user].length; i++) {
+        for (uint i; i < userStakeIds[_user].length; i++) {
             stakeId = userStakeIds[_user][i];
             lastClaim = stakingLastClaim[stakeId];
             until = stakingEndDate[stakeId] < block.timestamp ? stakingEndDate[stakeId] : block.timestamp;
@@ -217,7 +212,7 @@ contract ThreeYearsStakingContractFixedAPR is Ownable, ReentrancyGuard {
      * @dev     update last claim of a user
      */
     function _updateLastClaim() internal {
-        for (uint i = 0; i < userStakeIds[msg.sender].length; i++) {
+        for (uint i ; i < userStakeIds[msg.sender].length; i++) {
             stakingLastClaim[userStakeIds[msg.sender][i]] = block.timestamp;
         }
         emit LastClaim(msg.sender,block.timestamp);
